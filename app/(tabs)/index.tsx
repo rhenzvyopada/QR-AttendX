@@ -1,6 +1,8 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
+  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -8,74 +10,363 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 
-import AppButton from '@/components/AppButton';
 import { COLORS } from '@/constants/colors';
+import {
+  getAttendanceHistory,
+  getTeacherEventAttendance,
+  type AttendanceRecord,
+  type TeacherEventAttendance,
+} from '@/lib/attendance';
+import { useAuth } from '@/lib/auth';
+import { getProfile, type Profile, type ProfileRole } from '@/lib/profiles';
+
+type Stat = {
+  key: string;
+  icon: keyof typeof MaterialIcons.glyphMap;
+  label: string;
+  value: string;
+};
+
+function formatShortDate(value?: string | null): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function isThisMonth(value: string): boolean {
+  const date = new Date(value);
+  const now = new Date();
+  return (
+    !Number.isNaN(date.getTime()) &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear()
+  );
+}
 
 export default function Index() {
   const { width } = useWindowDimensions();
   const desktop = width >= 900;
+  const { user } = useAuth();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [role, setRole] = useState<ProfileRole>('student');
+  const [studentRecords, setStudentRecords] = useState<AttendanceRecord[]>([]);
+  const [teacherEvents, setTeacherEvents] = useState<TeacherEventAttendance[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      const load = async () => {
+        if (!user) return;
+        setLoading(true);
+        const nextProfile = await getProfile(user.id);
+        if (!active) return;
+        setProfile(nextProfile);
+        const profileRole = nextProfile?.role ?? 'student';
+        setRole(profileRole);
+        if (profileRole === 'teacher') setTeacherEvents(await getTeacherEventAttendance(user.id));
+        else setStudentRecords(await getAttendanceHistory(user.id));
+        if (active) setLoading(false);
+      };
+      void load();
+      return () => {
+        active = false;
+      };
+    }, [user]),
+  );
+
+  const pending = loading ? '—' : undefined;
+  const monthlyCheckIns =
+    role === 'teacher'
+      ? teacherEvents
+          .flatMap((event) => event.attendees)
+          .filter((attendee) => isThisMonth(attendee.scannedAt)).length
+      : studentRecords.filter((record) => isThisMonth(record.scannedAt)).length;
+
+  const stats: Stat[] =
+    role === 'teacher'
+      ? [
+          {
+            key: 'events',
+            icon: 'event-available',
+            label: 'Events created',
+            value: pending ?? String(teacherEvents.length),
+          },
+          {
+            key: 'checkins',
+            icon: 'how-to-reg',
+            label: 'Total check-ins',
+            value:
+              pending ??
+              String(teacherEvents.reduce((total, event) => total + event.attendees.length, 0)),
+          },
+          {
+            key: 'students',
+            icon: 'groups',
+            label: 'Students checked in',
+            value:
+              pending ??
+              String(
+                new Set(
+                  teacherEvents.flatMap((event) =>
+                    event.attendees.map((attendee) => attendee.studentId),
+                  ),
+                ).size,
+              ),
+          },
+          {
+            key: 'month',
+            icon: 'date-range',
+            label: 'Check-ins this month',
+            value:
+              pending ??
+              String(
+                teacherEvents
+                  .flatMap((event) => event.attendees)
+                  .filter((attendee) => isThisMonth(attendee.scannedAt)).length,
+              ),
+          },
+        ]
+      : [
+          {
+            key: 'checkins',
+            icon: 'how-to-reg',
+            label: 'Total check-ins',
+            value: pending ?? String(studentRecords.length),
+          },
+          {
+            key: 'events',
+            icon: 'event',
+            label: 'Events attended',
+            value: pending ?? String(new Set(studentRecords.map((record) => record.eventId)).size),
+          },
+          {
+            key: 'month',
+            icon: 'date-range',
+            label: 'Check-ins this month',
+            value:
+              pending ?? String(studentRecords.filter((record) => isThisMonth(record.scannedAt)).length),
+          },
+          {
+            key: 'last',
+            icon: 'schedule',
+            label: 'Last check-in',
+            value: formatShortDate(studentRecords[0]?.scannedAt),
+          },
+        ];
+
+  const metadataName = user?.user_metadata?.full_name;
+  const displayName =
+    profile?.full_name?.trim() ||
+    (typeof metadataName === 'string' ? metadataName.trim() : '') ||
+    user?.email?.split('@')[0] ||
+    'there';
+  const greetingName = displayName.split(/\s+/)[0];
+  const recentItems =
+    role === 'teacher'
+      ? teacherEvents
+          .flatMap((event) =>
+            event.attendees.map((attendee) => ({
+              id: `${attendee.studentId}-${attendee.scannedAt}`,
+              title: event.title,
+              subtitle: attendee.studentName || `Student …${attendee.studentId.slice(-8)}`,
+              date: attendee.scannedAt,
+            })),
+          )
+          .sort((first, second) => new Date(second.date).getTime() - new Date(first.date).getTime())
+          .slice(0, 3)
+      : studentRecords.slice(0, 3).map((record) => ({
+          id: record.id,
+          title: record.eventTitle,
+          subtitle: `Event ${record.eventId}`,
+          date: record.scannedAt,
+        }));
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          desktop && styles.desktopScrollContent,
-        ]}
+        contentContainerStyle={[styles.scrollContent, desktop && styles.desktopScrollContent]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.layout, desktop && styles.desktopLayout]}>
-          <View style={[styles.hero, desktop && styles.desktopHero]}>
-            <View style={styles.brandRow}>
-              <View style={styles.logoCircle}>
-                <MaterialIcons name="school" size={30} color={COLORS.primary} />
-              </View>
-              <View>
-                <Text style={styles.brandName}>QR AttendX</Text>
-                <Text style={styles.brandMeta}>ATTENDACE SCHOOL SYSTEM</Text>
-              </View>
+        <View style={styles.page}>
+          <Text style={styles.greeting}>Hey, {greetingName}</Text>
+          <Text style={styles.subtitle}>Your attendance, at a glance.</Text>
+
+          <View style={styles.dashboard}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>QR AttendX</Text>
+              <Pressable
+                accessibilityLabel="Open attendance history"
+                accessibilityRole="button"
+                onPress={() => router.push('/history')}
+                style={({ pressed }) => [styles.cardDots, pressed && styles.quickActionPressed]}
+              >
+                <MaterialIcons name="apps" size={18} color={COLORS.textSecondary} />
+              </Pressable>
             </View>
 
-            <Text style={styles.eyebrow}>SMART EVENT CHECK-IN</Text>
-            <Text style={[styles.heroTitle, desktop && styles.desktopHeroTitle]}>
-              Attendance that keeps everyone moving.
-            </Text>
-            <Text style={styles.heroText}>
-              Scan event QR codes, review your attendance, and keep your school
-              activity records in one secure place.
-            </Text>
-
-            <View style={styles.statusRow}>
-              <View style={styles.statusDot} />
-              <Text style={styles.statusText}>QR AttendX is ready</Text>
-            </View>
-            <Text style={styles.credit}>Developed by Rhenzvy Opada</Text>
-          </View>
-
-          <View style={[styles.actionCard, desktop && styles.desktopActionCard]}>
-            <Text style={styles.actionEyebrow}>QUICK ACTIONS</Text>
-            <Text style={styles.actionTitle}>What would you like to do?</Text>
-            <Text style={styles.actionText}>
-              Choose an option below to continue.
-            </Text>
-
-            <AppButton
-              theme="primary"
-              title="Scan QR Code"
-              icon="qr-code-scanner"
-              onPress={() => router.push('/scan')}
-            />
-            <AppButton
-              title="Attendance History"
-              icon="history"
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="View monthly attendance history"
               onPress={() => router.push('/history')}
-            />
-            <AppButton
-              title="View Profile"
-              icon="person"
-              onPress={() => router.push('/profile')}
-            />
+              style={({ pressed }) => [styles.monthlyPanel, pressed && styles.featurePressed]}
+            >
+              <View style={styles.monthlyCopy}>
+                <Text style={styles.monthlyEyebrow}>MONTHLY SUMMARY</Text>
+                <Text style={styles.monthlyTitle}>Check-ins this month</Text>
+                <Text style={styles.monthlyHint}>Tap to view your attendance history</Text>
+              </View>
+              <View
+                accessibilityLabel={`${pending ?? monthlyCheckIns} check-ins this month`}
+                accessibilityRole="image"
+                style={styles.progressCircle}
+              >
+                <Svg width={88} height={88} viewBox="0 0 88 88">
+                  <Circle
+                    cx="44"
+                    cy="44"
+                    r="37"
+                    fill="none"
+                    stroke={COLORS.surface}
+                    strokeWidth="6"
+                  />
+                </Svg>
+                <Text style={styles.progressCount}>{pending ?? monthlyCheckIns}</Text>
+              </View>
+              <MaterialIcons name="arrow-forward" size={18} color={COLORS.textOnPrimary} />
+            </Pressable>
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryTitle}>Overview</Text>
+              <Text style={styles.summaryHint}>All time</Text>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.statsScroll}
+            >
+              <View style={styles.statsRow}>
+                {stats
+                  .filter((stat) => stat.key !== 'month')
+                  .slice(0, 3)
+                  .map((stat) => (
+                    <View key={stat.key} style={styles.statCard}>
+                      <View style={styles.statCardHeader}>
+                        <View style={styles.statIcon}>
+                          <MaterialIcons color={COLORS.primaryDark} name={stat.icon} size={17} />
+                        </View>
+                        <MaterialIcons
+                          name="north-east"
+                          size={15}
+                          color={COLORS.textSecondary}
+                        />
+                      </View>
+                      <Text style={styles.statValue}>{stat.value}</Text>
+                      <Text numberOfLines={2} style={styles.statLabel}>
+                        {stat.label}
+                      </Text>
+                    </View>
+                  ))}
+              </View>
+            </ScrollView>
+
+            <View style={styles.sectionHeader}>
+              <Text style={styles.summaryTitle}>Recent check-ins</Text>
+              <Pressable accessibilityRole="button" onPress={() => router.push('/history')}>
+                <Text style={styles.viewAll}>View all</Text>
+              </Pressable>
+            </View>
+            {loading ? (
+              <Text style={styles.emptyActivity}>Loading activity…</Text>
+            ) : recentItems.length ? (
+              <View style={styles.activityList}>
+                {recentItems.map((item, index) => (
+                  <View
+                    key={item.id}
+                    style={[styles.activityRow, index > 0 && styles.activityDivider]}
+                  >
+                    <View style={styles.activityIcon}>
+                      <MaterialIcons
+                        name={role === 'teacher' ? 'event-note' : 'check'}
+                        size={17}
+                        color={COLORS.primaryDark}
+                      />
+                    </View>
+                    <View style={styles.activityCopy}>
+                      <Text numberOfLines={1} style={styles.activityTitle}>
+                        {item.title}
+                      </Text>
+                      <Text numberOfLines={1} style={styles.activitySubtitle}>
+                        {item.subtitle}
+                      </Text>
+                    </View>
+                    <Text style={styles.activityDate}>{formatShortDate(item.date)}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.emptyActivity}>
+                No check-ins yet. Scan an event QR to get started.
+              </Text>
+            )}
+
+            <View style={styles.quickRow}>
+              {(
+                [
+                  ...(role === 'student'
+                    ? [
+                        {
+                          icon: 'qr-code-scanner' as const,
+                          label: 'Scan',
+                          action: () => router.push('/scan'),
+                        },
+                      ]
+                    : []),
+                  { icon: 'history' as const, label: 'History', action: () => router.push('/history') },
+                  ...(role === 'teacher'
+                    ? [
+                        {
+                          icon: 'event-note' as const,
+                          label: 'Teacher',
+                          action: () => router.push('/teacher'),
+                        },
+                      ]
+                    : []),
+                  ...(role === 'administrator'
+                    ? [
+                        {
+                          icon: 'security' as const,
+                          label: 'Admin',
+                          action: () => router.push('/admin'),
+                        },
+                      ]
+                    : []),
+                  { icon: 'person' as const, label: 'Profile', action: () => router.push('/profile') },
+                ] as Array<{
+                  icon: keyof typeof MaterialIcons.glyphMap;
+                  label: string;
+                  action: () => void;
+                }>
+              ).map((item) => (
+                <Pressable
+                  key={item.label}
+                  accessibilityLabel={item.label}
+                  accessibilityRole="button"
+                  onPress={item.action}
+                  style={({ pressed }) => [
+                    styles.quickAction,
+                    pressed && styles.quickActionPressed,
+                  ]}
+                >
+                  <MaterialIcons name={item.icon} size={19} color={COLORS.textPrimary} />
+                  <Text style={styles.quickActionText}>{item.label}</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -84,54 +375,255 @@ export default function Index() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: COLORS.background },
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
     paddingHorizontal: 20,
-    paddingTop: 32,
-    paddingBottom: 104,
+    paddingTop: 24,
+    paddingBottom: 120,
   },
-  desktopScrollContent: { paddingHorizontal: 40, paddingTop: 56, paddingBottom: 128 },
-  layout: { width: '100%', maxWidth: 1040, alignSelf: 'center', gap: 24 },
-  desktopLayout: { flexDirection: 'row', alignItems: 'stretch', gap: 32 },
-  hero: {
-    backgroundColor: COLORS.primaryDark,
-    borderRadius: 22,
-    padding: 24,
-    overflow: 'hidden',
-  },
-  desktopHero: { flex: 1, minHeight: 450, padding: 40, justifyContent: 'center' },
-  brandRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 36 },
-  logoCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: COLORS.card,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-  brandName: { fontSize: 18, fontWeight: '700', color: COLORS.textOnPrimary },
-  brandMeta: { fontSize: 10, fontWeight: '700', letterSpacing: 1.2, color: COLORS.onPrimaryMuted, marginTop: 3 },
-  eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.5, color: COLORS.onPrimaryMuted, marginBottom: 12 },
-  heroTitle: { fontSize: 32, lineHeight: 39, fontWeight: '700', color: COLORS.textOnPrimary, maxWidth: 540 },
-  desktopHeroTitle: { fontSize: 44, lineHeight: 52 },
-  heroText: { fontSize: 16, lineHeight: 25, color: COLORS.onPrimarySoft, maxWidth: 570, marginTop: 16 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 32 },
-  statusDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: COLORS.successLight, marginRight: 9 },
-  statusText: { fontSize: 13, fontWeight: '600', color: COLORS.onPrimarySoft },
-  credit: { fontSize: 12, color: COLORS.onPrimaryMuted, marginTop: 10 },
-  actionCard: {
+  desktopScrollContent: { paddingHorizontal: 40, paddingTop: 40 },
+  page: {
     width: '100%',
-    backgroundColor: COLORS.elevated,
+    maxWidth: 540,
+    alignSelf: 'center',
+    paddingVertical: 24,
+  },
+  greeting: {
+    fontSize: 30,
+    lineHeight: 36,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 24,
+    color: COLORS.textSecondary,
+    marginBottom: 24,
+    maxWidth: 360,
+  },
+  dashboard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 22,
-    padding: 24,
+    padding: 18,
+    paddingBottom: 8,
+    shadowColor: 'transparent',
+    shadowOpacity: 0,
+    elevation: 0,
   },
-  desktopActionCard: { width: 400, justifyContent: 'center', padding: 32 },
-  actionEyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.4, color: COLORS.primary, marginBottom: 8 },
-  actionTitle: { fontSize: 25, lineHeight: 32, fontWeight: '700', color: COLORS.textPrimary },
-  actionText: { fontSize: 15, lineHeight: 22, color: COLORS.textSecondary, marginTop: 6, marginBottom: 24 },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  cardDots: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+  },
+  monthlyPanel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: COLORS.primary,
+    borderRadius: 16,
+    paddingVertical: 15,
+    paddingHorizontal: 16,
+    marginBottom: 20,
+  },
+  featurePressed: { opacity: 0.84 },
+  monthlyCopy: {
+    flex: 1,
+    gap: 5,
+  },
+  monthlyEyebrow: {
+    color: COLORS.textOnPrimary,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+  },
+  monthlyTitle: {
+    color: COLORS.textOnPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  monthlyHint: {
+    color: COLORS.textOnPrimary,
+    fontSize: 12,
+  },
+  progressCircle: {
+    width: 88,
+    height: 88,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressCount: {
+    position: 'absolute',
+    color: COLORS.textOnPrimary,
+    fontSize: 24,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  quickRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 18,
+    marginBottom: 12,
+    gap: 10,
+  },
+  quickAction: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    paddingVertical: 13,
+  },
+  quickActionPressed: {
+    backgroundColor: COLORS.primarySoft,
+    borderColor: COLORS.primary,
+    opacity: 0.85,
+  },
+  quickActionText: {
+    color: COLORS.textPrimary,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  summaryTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  summaryHint: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statsScroll: {
+    marginHorizontal: -18,
+    marginBottom: 20,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 18,
+  },
+  statCard: {
+    width: 142,
+    minHeight: 124,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 15,
+    padding: 12,
+    justifyContent: 'space-between',
+  },
+  statCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  statIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: COLORS.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statValue: {
+    color: COLORS.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  statLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+    lineHeight: 15,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  viewAll: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  activityList: {
+    marginTop: 6,
+  },
+  activityRow: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+  },
+  activityDivider: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  activityIcon: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    backgroundColor: COLORS.surface,
+  },
+  activityCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  activityTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  activitySubtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    marginTop: 3,
+  },
+  activityDate: {
+    color: COLORS.textSecondary,
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  emptyActivity: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+    paddingVertical: 16,
+  },
 });

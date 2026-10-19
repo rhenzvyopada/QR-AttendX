@@ -2,6 +2,11 @@
 # dependencies
 node_modules/
 
+# environment variables (contain project keys; .env.example stays tracked)
+.env
+.env.*
+!.env.example
+
 # expo
 .expo/
 dist/

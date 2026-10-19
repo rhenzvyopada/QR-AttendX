@@ -13,14 +13,17 @@ type Props = {
 export default function PickerField({ value, icon, onPress, label }: Props) {
   return (
     <View style={styles.fieldOuter}>
-      <Pressable accessibilityLabel={label} accessibilityRole="button" style={styles.fieldInner} onPress={onPress}>
-        <MaterialIcons
-          name={icon}
-          size={22}
-          color={COLORS.primary}
-          style={styles.icon}
-        />
-        <Text style={styles.value}>{value}</Text>
+      <Pressable
+        accessibilityLabel={label}
+        accessibilityRole="button"
+        onPress={onPress}
+        style={({ pressed }) => [styles.fieldInner, pressed && styles.pressed]}
+      >
+        <MaterialIcons color={COLORS.primaryInk} name={icon} size={20} />
+        <Text numberOfLines={1} style={styles.value}>
+          {value}
+        </Text>
+        <MaterialIcons color={COLORS.textSecondary} name="keyboard-arrow-down" size={22} />
       </Pressable>
     </View>
   );
@@ -29,21 +32,24 @@ export default function PickerField({ value, icon, onPress, label }: Props) {
 const styles = StyleSheet.create({
   fieldOuter: {
     width: '100%',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   fieldInner: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
     backgroundColor: COLORS.card,
-    borderRadius: 10,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    minHeight: 52,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  icon: { paddingRight: 10 },
+  pressed: { backgroundColor: COLORS.surface },
   value: {
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '600',
     color: COLORS.textPrimary,
     flex: 1,
   },

@@ -1,7 +1,9 @@
 import type { Session, User } from '@supabase/supabase-js';
 import { useSyncExternalStore } from 'react';
 
+import { ensureProfile } from './profiles';
 import { isSupabaseConfigured, supabase } from './supabase';
+import { eventBus, type EventName } from './attendance';
 
 export type AuthState = {
   session: Session | null;
@@ -11,7 +13,7 @@ export type AuthState = {
 
 export type SignUpProfile = {
   full_name: string;
-  role: 'student' | 'teacher';
+  role: 'student' | 'teacher' | 'administrator';
 };
 
 let state: AuthState = { session: null, user: null, loading: true };
@@ -28,8 +30,24 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
+function notifyLogin(user: User): void {
+  eventBus.emit('userLogin', { userId: user.id, email: user.email ?? null });
+}
+
+function notifyLogout(userId: string): void {
+  eventBus.emit('userLoggedOut', { userId });
+}
+
 export function setAuth(session: Session | null) {
   emit({ session, user: session?.user ?? null, loading: false });
+  // Existing accounts created before the schema was applied have no profile
+  // row; make sure one exists so RLS policies (such as event creation) pass.
+  if (session?.user.id) {
+    void ensureProfile(session.user.id);
+  }
+  if (session?.user) {
+    notifyLogin(session.user);
+  }
 }
 
 export function useAuth(): AuthState {
@@ -89,6 +107,9 @@ export async function signIn(email: string, password: string) {
 
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
-  if (!error) setAuth(null);
+  if (!error) {
+    notifyLogout(state.user?.id ?? '');
+    setAuth(null);
+  }
   return { error };
 }
