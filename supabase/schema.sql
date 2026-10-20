@@ -1,3 +1,13 @@
+-- ==============================================================================
+-- EXTENSIONS & UTILITIES
+-- ==============================================================================
+create extension if not exists pgcrypto;
+
+-- ==============================================================================
+-- TABLES
+-- ==============================================================================
+
+-- 1. Profiles
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   email text not null,
@@ -6,18 +16,13 @@ create table if not exists public.profiles (
   phone text,
   address text,
   city text,
-  date_of_birth text,
+  date_of_birth date,
   emergency_contact text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-alter table public.profiles add column if not exists phone text;
-alter table public.profiles add column if not exists address text;
-alter table public.profiles add column if not exists city text;
-alter table public.profiles add column if not exists date_of_birth text;
-alter table public.profiles add column if not exists emergency_contact text;
-
+-- 2. Events
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),
   event_code text not null unique,
@@ -33,11 +38,7 @@ create table if not exists public.events (
   updated_at timestamptz not null default now()
 );
 
--- Add the richer event fields for databases created before they existed.
-alter table public.events add column if not exists venue text;
-alter table public.events add column if not exists description text;
-
-
+-- 3. Attendance
 create table if not exists public.attendance (
   id uuid primary key default gen_random_uuid(),
   student_id uuid not null references auth.users (id) on delete cascade,
@@ -46,8 +47,33 @@ create table if not exists public.attendance (
   unique (student_id, event_id)
 );
 
--- Keep event `updated_at` in sync when an event row changes.
-create or replace function public.loosen_event_updated_at()
+-- ==============================================================================
+-- INDEXES (Crucial for RLS Performance)
+-- ==============================================================================
+create index if not exists idx_profiles_role on public.profiles(role);
+create index if not exists idx_events_created_by on public.events(created_by);
+create index if not exists idx_attendance_student_id on public.attendance(student_id);
+create index if not exists idx_attendance_event_id on public.attendance(event_id);
+
+-- ==============================================================================
+-- FUNCTIONS & TRIGGERS
+-- ==============================================================================
+
+-- 1. Helper Function: Safely check if the current user is an admin.
+-- (Fixes the infinite recursion bug in RLS policies)
+create or replace function public.is_admin()
+returns boolean
+language sql
+security definer set search_path = public
+as $$
+  select exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role = 'administrator'
+  );
+$$;
+
+-- 2. Automatically update the `updated_at` column on events
+create or replace function public.handle_updated_at()
 returns trigger
 language plpgsql
 as $$
@@ -60,35 +86,33 @@ $$;
 drop trigger if exists events_updated_at on public.events;
 create trigger events_updated_at
   before update on public.events
-  for each row
-  execute procedure public.loosen_event_updated_at();
+  for each row execute procedure public.handle_updated_at();
 
-alter table public.profiles enable row level security;
-alter table public.events enable row level security;
-alter table public.attendance enable row level security;
+-- 3. SECURITY: Prevent users from promoting themselves to Administrator
+create or replace function public.prevent_role_escalation()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if old.role <> new.role then
+    if not exists (
+      select 1 from public.profiles 
+      where id = auth.uid() and role = 'administrator'
+    ) then
+      new.role = old.role; -- Revert if not an admin
+    end if;
+  end if;
+  return new;
+end;
+$$;
 
-drop policy if exists "Profiles are viewable by owner" on public.profiles;
-create policy "Profiles are viewable by owner" on public.profiles
-  for select using (auth.uid() = id);
+drop trigger if exists prevent_role_escalation_trigger on public.profiles;
+create trigger prevent_role_escalation_trigger
+  before update on public.profiles
+  for each row execute procedure public.prevent_role_escalation();
 
-drop policy if exists "Users can insert their own profile" on public.profiles;
-create policy "Users can insert their own profile" on public.profiles
-  for insert with check (auth.uid() = id);
-
-drop policy if exists "Users can update their own profile" on public.profiles;
-create policy "Users can update their own profile" on public.profiles
-  for update using (auth.uid() = id);
-
-drop policy if exists "Teachers can view profiles of their attendees" on public.profiles;
-create policy "Teachers can view profiles of their attendees" on public.profiles
-  for select using (
-    exists (
-      select 1 from public.attendance a
-      join public.events e on e.id = a.event_id
-      where a.student_id = profiles.id and e.created_by = auth.uid()
-    )
-  );
-
+-- 4. AUTH: Create a profile row automatically when a new user signs up
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -115,6 +139,56 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
+-- ==============================================================================
+-- ROW LEVEL SECURITY (RLS)
+-- ==============================================================================
+alter table public.profiles enable row level security;
+alter table public.events enable row level security;
+alter table public.attendance enable row level security;
+
+-- ------------------------------------------------------------------------------
+-- RLS: PROFILES
+-- ------------------------------------------------------------------------------
+
+drop policy if exists "Profiles are viewable by owner" on public.profiles;
+create policy "Profiles are viewable by owner" on public.profiles
+  for select using (auth.uid() = id);
+
+drop policy if exists "Users can insert their own profile" on public.profiles;
+create policy "Users can insert their own profile" on public.profiles
+  for insert with check (auth.uid() = id);
+
+drop policy if exists "Users can update their own profile" on public.profiles;
+create policy "Users can update their own profile" on public.profiles
+  for update using (auth.uid() = id);
+
+drop policy if exists "Teachers can view profiles of their attendees" on public.profiles;
+create policy "Teachers can view profiles of their attendees" on public.profiles
+  for select using (
+    exists (
+      select 1 from public.attendance a
+      join public.events e on e.id = a.event_id
+      where a.student_id = profiles.id and e.created_by = auth.uid()
+    )
+  );
+
+-- ADMIN: View, Update, Delete any profile
+drop policy if exists "Administrators can view all profiles" on public.profiles;
+create policy "Administrators can view all profiles" on public.profiles
+  for select using (public.is_admin());
+
+drop policy if exists "Administrators can update any profile" on public.profiles;
+create policy "Administrators can update any profile" on public.profiles
+  for update using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists "Administrators can delete profiles" on public.profiles;
+create policy "Administrators can delete profiles" on public.profiles
+  for delete using (public.is_admin());
+
+-- ------------------------------------------------------------------------------
+-- RLS: EVENTS
+-- ------------------------------------------------------------------------------
+
 drop policy if exists "Events are readable by any authenticated user" on public.events;
 create policy "Events are readable by any authenticated user" on public.events
   for select using (auth.role() = 'authenticated');
@@ -137,152 +211,31 @@ create policy "Users can update their own events" on public.events
       select 1 from public.profiles p
       where p.id = auth.uid() and p.role = 'teacher'
     )
+    and status = 'open'
   )
   with check (auth.uid() = created_by);
 
-drop policy if exists "Students can view their own attendance" on public.attendance;
-create policy "Students can view their own attendance" on public.attendance
-  for select using (auth.uid() = student_id);
-
--- Students may register their own attendance, but only for events that exist
--- and are still open. The server-side check prevents a tampered client from
--- inserting attendance rows for closed or non-existent events.
-drop policy if exists "Students can insert their own attendance" on public.attendance;
-create policy "Students can insert their own attendance" on public.attendance
-  for insert with check (
-    auth.uid() = student_id
-    and exists (
-      select 1 from public.events e
-      where e.id = attendance.event_id and e.status = 'open'
-    )
-  );
-
-drop policy if exists "Teachers can view attendance for their events" on public.attendance;
-create policy "Teachers can view attendance for their events" on public.attendance
-  for select using (
-    exists (
-      select 1 from public.events e
-      where e.id = attendance.event_id and e.created_by = auth.uid()
-    )
-  );
-
--- Administrators can view all events and manage (create/update/close/delete)
--- events in the whole system.
+-- ADMIN: Full CRUD on Events
 drop policy if exists "Administrators can view all events" on public.events;
 create policy "Administrators can view all events" on public.events
-  for select
-  using (
-    exists (
-      select 1 from public.profiles
-      where profiles.id = auth.uid() and profiles.role = 'administrator'
-    )
-  );
+  for select using (public.is_admin());
 
 drop policy if exists "Administrators can create events" on public.events;
 create policy "Administrators can create events" on public.events
-  for insert
-  with check (
-    exists (
-      select 1 from public.profiles
-      where profiles.id = auth.uid() and profiles.role = 'administrator'
-    )
-  );
+  for insert with check (public.is_admin());
 
 drop policy if exists "Administrators can update events" on public.events;
 create policy "Administrators can update events" on public.events
-  for update
-  using (
-    exists (
-      select 1 from public.profiles
-      where profiles.id = auth.uid() and profiles.role = 'administrator'
-    )
-  )
-  with check (
-    exists (
-      select 1 from public.profiles
-      where profiles.id = auth.uid() and profiles.role = 'administrator'
-    )
-  );
-
-drop policy if exists "Administrators can close events" on public.events;
-create policy "Administrators can close events" on public.events
-  for update
-  using (
-    exists (
-      select 1 from public.profiles
-      where profiles.id = auth.uid() and profiles.role = 'administrator'
-    )
-  )
-  with check (
-    exists (
-      select 1 from public.profiles
-      where profiles.id = auth.uid() and profiles.role = 'administrator'
-    )
-  );
+  for update using (public.is_admin()) with check (public.is_admin());
 
 drop policy if exists "Administrators can delete events" on public.events;
 create policy "Administrators can delete events" on public.events
-  for delete
-  using (
-    exists (
-      select 1 from public.profiles
-      where profiles.id = auth.uid() and profiles.role = 'administrator'
-    )
-  );
+  for delete using (public.is_admin());
 
--- Administrators can view attendance records across the whole system, including
--- attendance for events they did not create.
-drop policy if exists "Administrators can view all attendance" on public.attendance;
-create policy "Administrators can view all attendance" on public.attendance
-  for select
-  using (
-    exists (
-      select 1 from public.profiles
-      where profiles.id = auth.uid() and profiles.role = 'administrator'
-    )
-  );
+-- ------------------------------------------------------------------------------
+-- RLS: ATTENDANCE
+-- ------------------------------------------------------------------------------
 
--- Administrators can insert attendance.
-drop policy if exists "Administrators can insert attendance" on public.attendance;
-create policy "Administrators can insert attendance" on public.attendance
-  for insert
-  with check (
-    exists (
-      select 1 from public.profiles
-      where profiles.id = auth.uid() and profiles.role = 'administrator'
-    )
-  );
-
--- Administrators can correct attendance records (e.g. fix a wrong scan time).
-drop policy if exists "Administrators can update attendance" on public.attendance;
-create policy "Administrators can update attendance" on public.attendance
-  for update
-  using (
-    exists (
-      select 1 from public.profiles
-      where profiles.id = auth.uid() and profiles.role = 'administrator'
-    )
-  )
-  with check (
-    exists (
-      select 1 from public.profiles
-      where profiles.id = auth.uid() and profiles.role = 'administrator'
-    )
-  );
-
--- Administrators can remove erroneous attendance records.
-drop policy if exists "Administrators can delete attendance" on public.attendance;
-create policy "Administrators can delete attendance" on public.attendance
-  for delete
-  using (
-    exists (
-      select 1 from public.profiles
-      where profiles.id = auth.uid() and profiles.role = 'administrator'
-    )
-  );
-
--- Students can only view and insert their own attendance, and only into
--- events that exist and are open (see the insert policy below).
 drop policy if exists "Students can view their own attendance" on public.attendance;
 create policy "Students can view their own attendance" on public.attendance
   for select using (auth.uid() = student_id);
@@ -297,7 +250,6 @@ create policy "Students can insert their own attendance" on public.attendance
     )
   );
 
--- Teachers can view attendance for events they created.
 drop policy if exists "Teachers can view attendance for their events" on public.attendance;
 create policy "Teachers can view attendance for their events" on public.attendance
   for select using (
@@ -307,75 +259,33 @@ create policy "Teachers can view attendance for their events" on public.attendan
     )
   );
 
--- Users (any authenticated role) can view their own profile and update it.
-drop policy if exists "Profiles are viewable by owner" on public.profiles;
-create policy "Profiles are viewable by owner" on public.profiles
-  for select using (auth.uid() = id);
+-- ADMIN: Full CRUD on Attendance
+drop policy if exists "Administrators can view all attendance" on public.attendance;
+create policy "Administrators can view all attendance" on public.attendance
+  for select using (public.is_admin());
 
-drop policy if exists "Users can insert their own profile" on public.profiles;
-create policy "Users can insert their own profile" on public.profiles
-  for insert with check (auth.uid() = id);
+drop policy if exists "Administrators can insert attendance" on public.attendance;
+create policy "Administrators can insert attendance" on public.attendance
+  for insert with check (public.is_admin());
 
-drop policy if exists "Users can update their own profile" on public.profiles;
-create policy "Users can update their own profile" on public.profiles
-  for update using (auth.uid() = id);
+drop policy if exists "Administrators can update attendance" on public.attendance;
+create policy "Administrators can update attendance" on public.attendance
+  for update using (public.is_admin()) with check (public.is_admin());
 
--- Teachers can view the profiles of students that have attended their events,
--- so they can map attendance to a person while staying within role-based
--- boundaries.
-drop policy if exists "Teachers can view profiles of their attendees" on public.profiles;
-create policy "Teachers can view profiles of their attendees" on public.profiles
-  for select using (
-    exists (
-      select 1 from public.attendance a
-      join public.events e on e.id = a.event_id
-      where a.student_id = profiles.id and e.created_by = auth.uid()
-    )
-  );
+drop policy if exists "Administrators can delete attendance" on public.attendance;
+create policy "Administrators can delete attendance" on public.attendance
+  for delete using (public.is_admin());
 
--- Administrators can view profiles of all users (user management).
-drop policy if exists "Administrators can view all profiles" on public.profiles;
-create policy "Administrators can view all profiles" on public.profiles
-  for select
-  using (
-    exists (
-      select 1 from public.profiles
-      where profiles.id = auth.uid() and profiles.role = 'administrator'
-    )
-  );
-
--- Administrators can update roles when managing users.
-drop policy if exists "Administrators can update any profile" on public.profiles;
-create policy "Administrators can update any profile" on public.profiles
-  for update
-  using (
-    exists (
-      select 1 from public.profiles
-      where profiles.id = auth.uid() and profiles.role = 'administrator'
-    )
-  )
-  with check (
-    exists (
-      select 1 from public.profiles
-      where profiles.id = auth.uid() and profiles.role = 'administrator'
-    )
-  );
-
--- Refresh PostgREST's schema cache so the new tables/columns are immediately
--- visible to the API. Safe to run repeatedly.
+-- ==============================================================================
+-- POSTGRES / POSTGREST CACHE RELOAD
+-- ==============================================================================
 notify pgrst, 'reload schema';
 
--- ---------------------------------------------------------------------------
--- Account repair: backfill missing profile rows.
---
--- Accounts that signed up before this schema (and its on_auth_user_created
--- trigger) was applied have no public.profiles row, so their chosen account
--- type is invisible to the app and to the RLS policies. This inserts a row for
--- every auth user that is missing one, using the role/name they chose at
--- sign-up (stored in raw_user_meta_data). It never touches rows that already
--- exist, so an administrator's later role changes are preserved. Safe to run
--- repeatedly.
--- ---------------------------------------------------------------------------
+-- ==============================================================================
+-- ACCOUNT REPAIR: BACKFILL MISSING PROFILES
+-- ==============================================================================
+-- Ensures any missing user from auth.users gets a profile row. 
+-- Crucial for finding existing accounts.
 insert into public.profiles (id, email, full_name, role, created_at, updated_at)
 select
   u.id,
@@ -390,4 +300,3 @@ select
   now()
 from auth.users u
 where not exists (select 1 from public.profiles p where p.id = u.id);
-

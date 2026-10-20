@@ -9,7 +9,7 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.mikeko.QRATT",
+      "bundleIdentifier": "com.rhenzvyopada.QR-AttendX",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -22,7 +22,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.mikeko.QRATT"
+      "package": "com.rhenzvyopada.QR-AttendX"
     },
     "web": {
       "output": "static",

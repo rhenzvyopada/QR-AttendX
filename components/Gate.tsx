@@ -31,7 +31,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator color="#231e27" size="large" />
+        <ActivityIndicator color="#393E41" size="large" />
         <Text style={styles.text}>Checking access...</Text>
       </View>
     );

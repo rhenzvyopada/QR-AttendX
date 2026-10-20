@@ -14,6 +14,8 @@ type Props = {
   editable?: boolean;
   error?: string | null;
   accessibilityLabel?: string;
+  /** Called when the keyboard "done/submit" action is pressed (e.g. Enter). */
+  onSubmitEditing?: () => void;
 };
 
 /**
@@ -30,6 +32,7 @@ export default function TextField({
   editable = true,
   error,
   accessibilityLabel,
+  onSubmitEditing,
 }: Props) {
   const [focused, setFocused] = useState(false);
 
@@ -43,6 +46,7 @@ export default function TextField({
         keyboardType={keyboardType}
         onChangeText={onChangeText}
         onBlur={() => setFocused(false)}
+        onSubmitEditing={onSubmitEditing}
         onFocus={() => setFocused(true)}
         placeholder={placeholder}
         placeholderTextColor={COLORS.textSecondary}

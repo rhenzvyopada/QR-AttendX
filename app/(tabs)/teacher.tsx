@@ -326,6 +326,7 @@ export default function TeacherScreen() {
           onChangeText={setEventId}
           placeholder='e.g. EVT-2026-0002'
           value={eventId}
+          onSubmitEditing={handleCreateEvent} // Added for easier creation
         />
         <TextField
           label='Venue'
@@ -389,6 +390,16 @@ export default function TeacherScreen() {
           <PressableChip label='+30 min' onPress={() => setEndOffset(30)} />
           <PressableChip label='+1 hour' onPress={() => setEndOffset(60)} />
           <PressableChip label='+2 hours' onPress={() => setEndOffset(120)} />
+        </View>
+
+        {/* NEW CREATE BUTTON ADDED HERE */}
+        <View style={{ marginTop: 16 }}>
+          <AppButton 
+            icon='add' 
+            theme='primary' 
+            onPress={handleCreateEvent} 
+            title='Create Event & Generate QR' 
+          />
         </View>
 
         {editTarget && isAndroid && (
@@ -565,7 +576,6 @@ export default function TeacherScreen() {
           </View>
         </Modal>
       )}
-
 
       {message && (
         <View style={styles.messageBox}>

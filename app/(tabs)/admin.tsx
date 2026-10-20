@@ -439,7 +439,7 @@ function EventRow({
           <Text numberOfLines={1} style={styles.name}>{event.title}</Text>
           <Text numberOfLines={1} style={styles.email}>{event.event_code}</Text>
           {event.venue ? (
-            <Text numberOfLines={1} style={styles.meta}>📍 {event.venue}</Text>
+            <Text numberOfLines={1} style={styles.meta}>{event.venue}</Text>
           ) : null}
           <Text numberOfLines={1} style={styles.meta}>
             {event.start_time ? formatTimestamp(event.start_time) : 'No date set'}
@@ -643,11 +643,8 @@ export default function AdminScreen() {
             <MaterialIcons color={COLORS.textOnPrimary} name="admin-panel-settings" size={26} />
           </View>
           <View style={styles.bannerCopy}>
-            <Text style={styles.bannerEyebrow}>ADMIN CONSOLE</Text>
+            <Text style={styles.bannerEyebrow}>ADMIN DASHBOARD</Text>
             <Text style={styles.bannerTitle}>Administrator</Text>
-            <Text style={styles.bannerSubtitle}>
-              View every event, review the overall check-in history, and manage accounts.
-            </Text>
           </View>
           <Pressable
             accessibilityLabel="Refresh data"
@@ -723,9 +720,7 @@ export default function AdminScreen() {
                 <View style={styles.sectionHeader}>
                   <View style={styles.sectionHeadingCopy}>
                     <Text style={styles.sectionTitle}>User accounts</Text>
-                    <Text style={styles.sectionHint}>
-                      Everyone registered in the system — change roles as needed.
-                    </Text>
+                    
                   </View>
                   <View style={styles.sectionCount}>
                     <Text style={styles.sectionCountText}>{users.length}</Text>
@@ -744,9 +739,7 @@ export default function AdminScreen() {
                 <View style={styles.sectionHeader}>
                   <View style={styles.sectionHeadingCopy}>
                     <Text style={styles.sectionTitle}>All events</Text>
-                    <Text style={styles.sectionHint}>
-                      Every event across the system — open or closed — with its check-in count.
-                    </Text>
+                    
                   </View>
                   <View style={styles.sectionCount}>
                     <Text style={styles.sectionCountText}>{events.length}</Text>
@@ -776,9 +769,7 @@ export default function AdminScreen() {
                 <View style={styles.sectionHeader}>
                   <View style={styles.sectionHeadingCopy}>
                     <Text style={styles.sectionTitle}>Attendance records</Text>
-                    <Text style={styles.sectionHint}>
-                      The overall check-in history for every event, newest first.
-                    </Text>
+                    
                   </View>
                   <View style={styles.sectionCount}>
                     <Text style={styles.sectionCountText}>{attendance.length}</Text>
@@ -797,9 +788,7 @@ export default function AdminScreen() {
                 <View style={styles.sectionHeader}>
                   <View style={styles.sectionHeadingCopy}>
                     <Text style={styles.sectionTitle}>System overview</Text>
-                    <Text style={styles.sectionHint}>
-                      Live counts and rankings across the whole system.
-                    </Text>
+                    
                   </View>
                 </View>
                 <View style={styles.statGrid}>
