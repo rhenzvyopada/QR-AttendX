@@ -57,6 +57,54 @@ A QR-code based school attendance app built with Expo Router, React Native, and 
    npm run start
    ```
 
+## Running on an Android phone
+
+The app is a native Expo/React Native app and runs on Android. Two options:
+
+### Option A — Expo Go (fastest, no build needed)
+
+1. Install **Expo Go** from the Play Store on your phone.
+2. Make sure the phone and computer are on the same Wi-Fi network.
+3. Start the dev server:
+
+   ```bash
+   npm run start
+   ```
+
+4. Scan the QR code shown in the terminal with the Expo Go app, or run
+   `npm run android` if you have an emulator/Android Studio connected.
+
+   > Camera scanning works in Expo Go on physical devices. The in-app "Grant
+   > Permission" button handles the runtime camera prompt.
+
+### Option B — Native build with EAS (for a standalone APK)
+
+1. Log in to Expo: `npx eas login`
+2. Create an Android build: `npx eas build --platform android --profile preview`
+3. When the build finishes, open the link on your phone and install the `.apk`.
+
+   The `preview` profile uses `distribution: "internal"`, so the APK installs
+   directly on a device without going through the Play Store. The `production`
+   profile produces a Play Store–ready AAB.
+
+### Requirements
+
+- **Android 6.0 (API 23) or newer** — Expo SDK 54 / React Native 0.81 minimum.
+- A working camera on the device for the student QR-scanning flow.
+- The `expo-camera` config plugin is enabled in `app.json`, so the
+  `android.permission.CAMERA` permission is injected into the manifest
+  automatically on every build (verified with `npx expo config`).
+
+### Troubleshooting on device
+
+- **"Camera Permission Needed"** — tap **Grant Permission** and accept the
+  system prompt. If you permanently denied it, go to
+  Settings → Apps → QR-ATT → Permissions → Camera and set it to **Allow**.
+- **QR codes never decode** — make sure the code is inside the on-screen frame,
+  hold steady, and raise screen brightness. Very dim codes need good lighting.
+- **Network errors** — the app talks directly to Supabase, so the phone needs
+  internet access (not just the local Wi-Fi the dev server is on).
+
 ## Notes
 
 - **Security — re-run the schema after updating.** The attendance insert policy

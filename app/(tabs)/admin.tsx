@@ -19,7 +19,7 @@ import Gate from '@/components/Gate';
 import PickerField from '@/components/PickerField';
 import TextField from '@/components/TextField';
 import { COLORS } from '@/constants/colors';
-import { getAllAttendance, type AdminAttendanceRecord } from '@/lib/attendance';
+import { getAllAttendance, eventBus, type AdminAttendanceRecord } from '@/lib/attendance';
 import { useAuth } from '@/lib/auth';
 import {
   closeEvent,
@@ -145,12 +145,6 @@ function ActionButton({
   );
 }
 
-/**
- * Reusable date + time picker field. Renders two pressable fields (date, time)
- * that open a native DateTimePicker, or an inline <input> on web. Encapsulates
- * all picker state so it can be dropped into the event editor and the
- * attendance "fix time" row without duplicating logic.
- */
 function DateTimeField({
   value,
   onChange,
@@ -325,20 +319,31 @@ function UserRow({ user, onChanged }: { user: Profile; onChanged: () => void }) 
 
   return (
     <View style={styles.card}>
-      <View style={styles.cardTop}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{(user.full_name?.[0] ?? user.email?.[0] ?? 'U').toUpperCase()}</Text>
+      <View style={styles.mainRow}>
+        {/* LEFT SIDE: Avatar & Info */}
+        <View style={styles.leftContent}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{(user.full_name?.[0] ?? user.email?.[0] ?? 'U').toUpperCase()}</Text>
+          </View>
+          <View style={styles.rowText}>
+            <Text numberOfLines={1} style={styles.name}>{user.full_name ?? user.email}</Text>
+            <Text numberOfLines={1} style={styles.email}>{user.email}</Text>
+          </View>
         </View>
-        <View style={styles.rowText}>
-          <Text numberOfLines={1} style={styles.name}>{user.full_name ?? user.email}</Text>
-          <Text numberOfLines={1} style={styles.email}>{user.email}</Text>
-        </View>
-        <View style={[styles.statusPill, styles.statusPillOpen]}>
-          <Text style={styles.statusPillText}>{user.role}</Text>
+
+        {/* RIGHT SIDE: Pills & Buttons */}
+        <View style={styles.rightColumn}>
+          <View style={[styles.statusPill, styles.statusPillOpen]}>
+            <Text style={styles.statusPillText}>{user.role}</Text>
+          </View>
+          {!editing && (
+            <ActionButton icon="edit" label="Change role" onPress={() => setEditing(true)} disabled={saving} />
+          )}
         </View>
       </View>
 
-      {editing ? (
+      {/* INLINE EDITOR */}
+      {editing && (
         <View style={styles.inlineEditor}>
           <Text style={styles.pickerLabel}>Assign role</Text>
           <RoleSelector value={role} onChange={setRole} />
@@ -347,10 +352,6 @@ function UserRow({ user, onChanged }: { user: Profile; onChanged: () => void }) 
             <ActionButton icon="close" label="Cancel" onPress={() => setEditing(false)} disabled={saving} />
           </View>
           {error && <Text style={styles.error}>{error}</Text>}
-        </View>
-      ) : (
-        <View style={styles.cardActions}>
-          <ActionButton icon="edit" label="Change role" onPress={() => setEditing(true)} disabled={saving} />
         </View>
       )}
     </View>
@@ -414,6 +415,14 @@ function EventRow({
       setError(toggleError.message);
       return;
     }
+    
+    // Emit event so other screens update
+    eventBus.emit('eventClosed', { 
+      eventId: event.id, 
+      status: closed ? 'open' : 'closed', 
+      action: closed ? 'reopen' : 'close' 
+    });
+    
     onChanged();
   }
 
@@ -431,46 +440,56 @@ function EventRow({
 
   return (
     <View style={styles.card}>
-      <View style={styles.cardTop}>
-        <View style={styles.avatar}>
-          <MaterialIcons color={COLORS.primaryInk} name="event" size={20} />
-        </View>
-        <View style={styles.rowText}>
-          <Text numberOfLines={1} style={styles.name}>{event.title}</Text>
-          <Text numberOfLines={1} style={styles.email}>{event.event_code}</Text>
-          {event.venue ? (
-            <Text numberOfLines={1} style={styles.meta}>{event.venue}</Text>
-          ) : null}
-          <Text numberOfLines={1} style={styles.meta}>
-            {event.start_time ? formatTimestamp(event.start_time) : 'No date set'}
-            {event.end_time ? ` → ${formatTime(new Date(event.end_time))}` : ''}
-          </Text>
-        </View>
-        <View style={styles.eventPills}>
-          <View style={styles.countPill}>
-            <Text style={styles.countPillText}>
-              {checkIns} {checkIns === 1 ? 'check-in' : 'check-ins'}
-            </Text>
+      <View style={styles.mainRow}>
+        {/* LEFT SIDE: Avatar & Info */}
+        <View style={styles.leftContent}>
+          <View style={styles.avatar}>
+            <MaterialIcons color={COLORS.primaryInk} name="event" size={20} />
           </View>
-          <View style={[styles.statusPill, closed ? styles.statusPillClosed : styles.statusPillOpen]}>
-            <Text style={[styles.statusPillText, closed && styles.statusPillTextClosed]}>
-              {event.status ?? 'open'}
+          <View style={styles.rowText}>
+            <Text numberOfLines={1} style={styles.name}>{event.title}</Text>
+            <Text numberOfLines={1} style={styles.email}>{event.event_code}</Text>
+            {event.venue ? (
+              <Text numberOfLines={1} style={styles.meta}>{event.venue}</Text>
+            ) : null}
+            <Text numberOfLines={1} style={styles.meta}>
+              {event.start_time ? formatTimestamp(event.start_time) : 'No date set'}
+              {event.end_time ? ` → ${formatTime(new Date(event.end_time))}` : ''}
             </Text>
           </View>
         </View>
+
+        {/* RIGHT SIDE: Pills & Buttons */}
+        <View style={styles.rightColumn}>
+          <View style={styles.pillRow}>
+            <View style={styles.countPill}>
+              <Text style={styles.countPillText}>
+                {checkIns} {checkIns === 1 ? 'check-in' : 'check-ins'}
+              </Text>
+            </View>
+            <View style={[styles.statusPill, closed ? styles.statusPillClosed : styles.statusPillOpen]}>
+              <Text style={[styles.statusPillText, closed && styles.statusPillTextClosed]}>
+                {event.status ?? 'open'}
+              </Text>
+            </View>
+          </View>
+
+          {!editing && (
+            <View style={styles.actionRow}>
+              <ActionButton icon="edit" label="Edit" onPress={() => setEditing((value) => !value)} disabled={saving} />
+              <ActionButton
+                icon={closed ? 'restore' : 'lock'}
+                label={closed ? 'Reopen' : 'Close'}
+                onPress={toggleStatus}
+                disabled={saving}
+              />
+              <ActionButton icon="delete" label="Delete" tone="danger" onPress={remove} disabled={saving} />
+            </View>
+          )}
+        </View>
       </View>
 
-      <View style={styles.cardActions}>
-        <ActionButton icon="edit" label="Edit" onPress={() => setEditing((value) => !value)} disabled={saving} />
-        <ActionButton
-          icon={closed ? 'restore' : 'lock'}
-          label={closed ? 'Reopen' : 'Close'}
-          onPress={toggleStatus}
-          disabled={saving}
-        />
-        <ActionButton icon="delete" label="Delete" tone="danger" onPress={remove} disabled={saving} />
-      </View>
-
+      {/* INLINE EDITOR */}
       {editing && (
         <View style={styles.inlineEditor}>
           <TextField label="Event title" onChangeText={setTitle} placeholder="Event title" value={title} />
@@ -498,8 +517,6 @@ function AttendanceRow({ record, onChanged }: { record: AdminAttendanceRecord; o
   async function saveFix() {
     setSaving(true);
     setError(null);
-    // setAttendance upserts by (student_id, event_id); passing a corrected
-    // timestamp updates the existing record.
     const { error: saveError } = await setAttendance(record.studentId, record.eventId, toLocalISO(scannedAt));
     setSaving(false);
     if (saveError) {
@@ -513,7 +530,6 @@ function AttendanceRow({ record, onChanged }: { record: AdminAttendanceRecord; o
   async function remove() {
     setSaving(true);
     setError(null);
-    // Passing null removes the attendance record.
     const { error: deleteError } = await setAttendance(record.studentId, record.eventId, null);
     setSaving(false);
     if (deleteError) {
@@ -625,7 +641,6 @@ export default function AdminScreen() {
     return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 5);
   })();
 
-  // Live counts shown as badges on the section tabs.
   const tabCount = (key: Tab): number | null =>
     key === 'users'
       ? users.length
@@ -719,8 +734,7 @@ export default function AdminScreen() {
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <View style={styles.sectionHeadingCopy}>
-                    <Text style={styles.sectionTitle}>User accounts</Text>
-                    
+                    <Text style={styles.sectionTitle}>User accounts</Text>              
                   </View>
                   <View style={styles.sectionCount}>
                     <Text style={styles.sectionCountText}>{users.length}</Text>
@@ -739,7 +753,6 @@ export default function AdminScreen() {
                 <View style={styles.sectionHeader}>
                   <View style={styles.sectionHeadingCopy}>
                     <Text style={styles.sectionTitle}>All events</Text>
-                    
                   </View>
                   <View style={styles.sectionCount}>
                     <Text style={styles.sectionCountText}>{events.length}</Text>
@@ -769,7 +782,6 @@ export default function AdminScreen() {
                 <View style={styles.sectionHeader}>
                   <View style={styles.sectionHeadingCopy}>
                     <Text style={styles.sectionTitle}>Attendance records</Text>
-                    
                   </View>
                   <View style={styles.sectionCount}>
                     <Text style={styles.sectionCountText}>{attendance.length}</Text>
@@ -788,7 +800,6 @@ export default function AdminScreen() {
                 <View style={styles.sectionHeader}>
                   <View style={styles.sectionHeadingCopy}>
                     <Text style={styles.sectionTitle}>System overview</Text>
-                    
                   </View>
                 </View>
                 <View style={styles.statGrid}>
@@ -989,11 +1000,39 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,
+  },
+  mainRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 16,
+  },
+  leftContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
+    flex: 1, 
+    minWidth: 200,
+  },
+  rightColumn: {
+    alignItems: 'flex-end',
+    gap: 10,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  cardActions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  eventPills: { alignItems: 'flex-end', gap: 6, flexShrink: 0 },
+  cardActions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 12 },
   statusPill: {
     paddingHorizontal: 12,
     paddingVertical: 5,
@@ -1049,8 +1088,8 @@ const styles = StyleSheet.create({
   actionButtonTextDanger: { color: COLORS.danger },
   inlineEditor: {
     width: '100%',
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 14,
+    paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: COLORS.surface,
     gap: 4,

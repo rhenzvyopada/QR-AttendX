@@ -14,13 +14,15 @@ import Svg, { Circle } from 'react-native-svg';
 
 import { COLORS } from '@/constants/colors';
 import {
+  getAllAttendance,
   getAttendanceHistory,
   getTeacherEventAttendance,
   type AttendanceRecord,
   type TeacherEventAttendance,
 } from '@/lib/attendance';
 import { useAuth } from '@/lib/auth';
-import { getProfile, type Profile, type ProfileRole } from '@/lib/profiles';
+import { getEventsByAdmin } from '@/lib/events';
+import { getProfile, listUsers, type Profile, type ProfileRole } from '@/lib/profiles';
 
 type Stat = {
   key: string;
@@ -50,10 +52,17 @@ export default function Index() {
   const { width } = useWindowDimensions();
   const desktop = width >= 900;
   const { user } = useAuth();
+  
   const [profile, setProfile] = useState<Profile | null>(null);
   const [role, setRole] = useState<ProfileRole>('student');
   const [studentRecords, setStudentRecords] = useState<AttendanceRecord[]>([]);
   const [teacherEvents, setTeacherEvents] = useState<TeacherEventAttendance[]>([]);
+  
+  // New states for Admin metrics
+  const [adminUserCount, setAdminUserCount] = useState(0);
+  const [adminEventCount, setAdminEventCount] = useState(0);
+  const [adminCheckInCount, setAdminCheckInCount] = useState(0);
+
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(
@@ -67,8 +76,24 @@ export default function Index() {
         setProfile(nextProfile);
         const profileRole = nextProfile?.role ?? 'student';
         setRole(profileRole);
-        if (profileRole === 'teacher') setTeacherEvents(await getTeacherEventAttendance(user.id));
-        else setStudentRecords(await getAttendanceHistory(user.id));
+        
+        if (profileRole === 'teacher') {
+          setTeacherEvents(await getTeacherEventAttendance(user.id));
+        } else if (profileRole === 'administrator') {
+          // Fetch system-wide data for Admin
+          const [users, events, attendance] = await Promise.all([
+            listUsers(),
+            getEventsByAdmin(),
+            getAllAttendance(),
+          ]);
+          if (!active) return;
+          setAdminUserCount(users?.length ?? 0);
+          setAdminEventCount(events?.length ?? 0);
+          setAdminCheckInCount(attendance?.length ?? 0);
+        } else {
+          setStudentRecords(await getAttendanceHistory(user.id));
+        }
+        
         if (active) setLoading(false);
       };
       void load();
@@ -130,6 +155,27 @@ export default function Index() {
               ),
           },
         ]
+      : role === 'administrator'
+      ? [
+          {
+            key: 'users',
+            icon: 'group',
+            label: 'Total system users',
+            value: pending ?? String(adminUserCount),
+          },
+          {
+            key: 'events',
+            icon: 'event',
+            label: 'Total system events',
+            value: pending ?? String(adminEventCount),
+          },
+          {
+            key: 'checkins',
+            icon: 'how-to-reg',
+            label: 'Total check-ins',
+            value: pending ?? String(adminCheckInCount),
+          },
+        ]
       : [
           {
             key: 'checkins',
@@ -165,6 +211,7 @@ export default function Index() {
     user?.email?.split('@')[0] ||
     'there';
   const greetingName = displayName.split(/\s+/)[0];
+  
   const recentItems =
     role === 'teacher'
       ? teacherEvents
@@ -185,6 +232,11 @@ export default function Index() {
           date: record.scannedAt,
         }));
 
+  const proTip = 
+    role === 'administrator' ? "Monitor system activity daily to ensure everything is running smoothly." :
+    role === 'teacher' ? "Remember to close your events after they end to prevent invalid check-ins." :
+    "Ensure your screen brightness is up when scanning a QR code for faster detection.";
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -193,8 +245,10 @@ export default function Index() {
       >
         <View style={styles.page}>
           <Text style={styles.greeting}>Hey, {greetingName}</Text>
-          <Text style={styles.subtitle}>Your attendance, at a glance.</Text>
-
+          <Text style={styles.subtitle}>
+            Welcome to QR AttendX
+          </Text>
+          
           <View style={styles.dashboard}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>QR AttendX</Text>
@@ -217,7 +271,11 @@ export default function Index() {
               <View style={styles.monthlyCopy}>
                 <Text style={styles.monthlyEyebrow}>MONTHLY SUMMARY</Text>
                 <Text style={styles.monthlyTitle}>Check-ins this month</Text>
-                <Text style={styles.monthlyHint}>Tap to view your attendance history</Text>
+                <Text style={styles.monthlyHint}>
+                  {role === 'administrator' 
+                    ? 'Tap to view the system history' 
+                    : 'Tap to view your attendance history'}
+                </Text>
               </View>
               <View
                 accessibilityLabel={`${pending ?? monthlyCheckIns} check-ins this month`}
@@ -310,63 +368,22 @@ export default function Index() {
               </View>
             ) : (
               <Text style={styles.emptyActivity}>
-                No check-ins yet. Scan an event QR to get started.
+                {role === 'administrator' 
+                  ? 'No system check-ins yet. Students will appear here once they scan.' 
+                  : 'No check-ins yet. Scan an event QR to get started.'}
               </Text>
             )}
 
-            <View style={styles.quickRow}>
-              {(
-                [
-                  ...(role === 'student'
-                    ? [
-                        {
-                          icon: 'qr-code-scanner' as const,
-                          label: 'Scan',
-                          action: () => router.push('/scan'),
-                        },
-                      ]
-                    : []),
-                  { icon: 'history' as const, label: 'History', action: () => router.push('/history') },
-                  ...(role === 'teacher'
-                    ? [
-                        {
-                          icon: 'event-note' as const,
-                          label: 'Teacher',
-                          action: () => router.push('/teacher'),
-                        },
-                      ]
-                    : []),
-                  ...(role === 'administrator'
-                    ? [
-                        {
-                          icon: 'security' as const,
-                          label: 'Admin',
-                          action: () => router.push('/admin'),
-                        },
-                      ]
-                    : []),
-                  { icon: 'person' as const, label: 'Profile', action: () => router.push('/profile') },
-                ] as Array<{
-                  icon: keyof typeof MaterialIcons.glyphMap;
-                  label: string;
-                  action: () => void;
-                }>
-              ).map((item) => (
-                <Pressable
-                  key={item.label}
-                  accessibilityLabel={item.label}
-                  accessibilityRole="button"
-                  onPress={item.action}
-                  style={({ pressed }) => [
-                    styles.quickAction,
-                    pressed && styles.quickActionPressed,
-                  ]}
-                >
-                  <MaterialIcons name={item.icon} size={19} color={COLORS.textPrimary} />
-                  <Text style={styles.quickActionText}>{item.label}</Text>
-                </Pressable>
-              ))}
+            <View style={styles.noticeCard}>
+              <View style={styles.noticeIcon}>
+                <MaterialIcons name="lightbulb-outline" size={20} color={COLORS.primaryDark} />
+              </View>
+              <View style={styles.noticeCopy}>
+                <Text style={styles.noticeTitle}>Pro Tip</Text>
+                <Text style={styles.noticeText}>{proTip}</Text>
+              </View>
             </View>
+
           </View>
         </View>
       </ScrollView>
@@ -413,7 +430,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     padding: 18,
-    paddingBottom: 8,
+    paddingBottom: 18, 
     shadowColor: 'transparent',
     shadowOpacity: 0,
     elevation: 0,
@@ -448,6 +465,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   featurePressed: { opacity: 0.84 },
+  quickActionPressed: { opacity: 0.84 },
   monthlyCopy: {
     flex: 1,
     gap: 5,
@@ -479,34 +497,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
-  },
-  quickRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 18,
-    marginBottom: 12,
-    gap: 10,
-  },
-  quickAction: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 14,
-    paddingVertical: 13,
-  },
-  quickActionPressed: {
-    backgroundColor: COLORS.primarySoft,
-    borderColor: COLORS.primary,
-    opacity: 0.85,
-  },
-  quickActionText: {
-    color: COLORS.textPrimary,
-    fontSize: 11,
-    fontWeight: '600',
   },
   summaryRow: {
     flexDirection: 'row',
@@ -625,5 +615,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     paddingVertical: 16,
+  },
+  noticeCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 16,
+  },
+  noticeIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: COLORS.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noticeCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  noticeTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+  },
+  noticeText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: COLORS.textSecondary,
   },
 });

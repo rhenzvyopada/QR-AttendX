@@ -41,7 +41,14 @@
       ],
       "expo-sqlite",
       "@react-native-community/datetimepicker",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow QR AttendX to scan event QR codes for attendance check-in.",
+          "recordAudioAndroid": false
+        }
+      ]
     ],
     "experiments": {
       "reactCompiler": true

@@ -90,6 +90,39 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function CompactButton({
+  icon,
+  label,
+  onPress,
+  danger,
+}: {
+  icon: keyof typeof MaterialIcons.glyphMap;
+  label: string;
+  onPress: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.compactButton,
+        danger && styles.compactButtonDanger,
+        pressed && styles.compactButtonPressed,
+      ]}
+    >
+      <MaterialIcons
+        name={icon}
+        size={16}
+        color={danger ? COLORS.danger : COLORS.textPrimary}
+      />
+      <Text style={[styles.compactButtonText, danger && styles.compactButtonTextDanger]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 export default function TeacherScreen() {
   const { user } = useAuth();
   const [role, setRole] = useState<ProfileRole | null>(null);
@@ -104,7 +137,11 @@ export default function TeacherScreen() {
   const [editTarget, setEditTarget] = useState<'start' | 'end' | null>(null);
   const [editingPart, setEditingPart] = useState<'date' | 'time'>('date');
   const [pickerDraft, setPickerDraft] = useState(() => new Date());
+  
+  // Added payloadTitle to know which event the QR code belongs to
   const [payload, setPayload] = useState<string | null>(null);
+  const [payloadTitle, setPayloadTitle] = useState<string | null>(null);
+
   const [message, setMessage] = useState<string | null>(null);
   const [events, setEvents] = useState<CloudEvent[]>([]);
   const [viewingEvent, setViewingEvent] = useState<CloudEvent | null>(null);
@@ -208,10 +245,12 @@ export default function TeacherScreen() {
     if (error) {
       setMessage(error.message);
       setPayload(null);
+      setPayloadTitle(null);
       return;
     }
     setMessage('Event saved! Students can now scan this QR code.');
     setPayload(buildQRPayload(event));
+    setPayloadTitle(event.title);
     setTitle('');
     setEventId('');
     setVenue('');
@@ -278,6 +317,20 @@ export default function TeacherScreen() {
     eventBus.emit('eventDeleted', { eventId: editingEvent.id });
   };
 
+  // NEW: Function to generate QR code for an existing event
+  const handleShowQR = (event: CloudEvent) => {
+    const qrEvent = {
+      eventId: event.event_code,
+      title: event.title,
+      venue: event.venue ?? null,
+      description: event.description ?? null,
+      start: event.start_time ? toLocalISO(new Date(event.start_time)) : toLocalISO(new Date()),
+      end: event.end_time ? toLocalISO(new Date(event.end_time)) : toLocalISO(new Date()),
+    };
+    setPayload(buildQRPayload(qrEvent));
+    setPayloadTitle(event.title);
+  };
+
   if (!role) {
     return (
       <View style={styles.gate}>
@@ -326,7 +379,7 @@ export default function TeacherScreen() {
           onChangeText={setEventId}
           placeholder='e.g. EVT-2026-0002'
           value={eventId}
-          onSubmitEditing={handleCreateEvent} // Added for easier creation
+          onSubmitEditing={handleCreateEvent}
         />
         <TextField
           label='Venue'
@@ -392,7 +445,6 @@ export default function TeacherScreen() {
           <PressableChip label='+2 hours' onPress={() => setEndOffset(120)} />
         </View>
 
-        {/* NEW CREATE BUTTON ADDED HERE */}
         <View style={{ marginTop: 16 }}>
           <AppButton 
             icon='add' 
@@ -518,30 +570,60 @@ export default function TeacherScreen() {
             const closed = event.status === 'closed';
             return (
               <View key={event.id} style={styles.eventListItem}>
-                <View style={styles.eventListCopy}>
-                  <Text numberOfLines={1} style={styles.eventListTitle}>{event.title}</Text>
-                  <Text style={styles.eventListMeta}>
-                    {event.event_code}
-                    {event.venue ? ` · ${event.venue}` : ''}
-                  </Text>
-                  <Text style={styles.eventListMeta}>
-                    {event.start_time ? formatTimestampShort(event.start_time) : 'No date'}
-                  </Text>
+                
+                {/* TOP ROW: Title and Status */}
+                <View style={styles.eventListHeader}>
+                  <View style={styles.eventListCopy}>
+                    <Text numberOfLines={1} style={styles.eventListTitle}>{event.title}</Text>
+                    <Text style={styles.eventListMeta}>
+                      {event.event_code}
+                      {event.venue ? ` · ${event.venue}` : ''}
+                    </Text>
+                    <Text style={styles.eventListMeta}>
+                      {event.start_time ? formatTimestampShort(event.start_time) : 'No date'}
+                    </Text>
+                  </View>
+                  <View style={[styles.badge, closed ? styles.badgeClosed : styles.badgeOpen]}>
+                    <Text style={[styles.badgeText, closed && styles.badgeTextClosed]}>
+                      {event.status ?? 'open'}
+                    </Text>
+                  </View>
                 </View>
-                <Text style={[styles.eventListStatus, closed && styles.eventListStatusClosed]}>
-                  {event.status ?? 'open'}
-                </Text>
+
+                {/* BOTTOM ROW: Action Buttons */}
                 <View style={styles.eventListActions}>
-                  <AppButton icon='visibility' theme='secondary' onPress={() => setViewingEvent(event)} title='View' />
-                  <AppButton icon='edit' theme='secondary' onPress={() => startEditing(event)} title='Edit' />
-                  <AppButton
+                  <CompactButton 
+                    icon="visibility" 
+                    label="View" 
+                    onPress={() => setViewingEvent(event)} 
+                  />
+                  <CompactButton 
+                    icon="edit" 
+                    label="Edit" 
+                    onPress={() => startEditing(event)} 
+                  />
+                  <CompactButton 
+                    icon="qr-code" 
+                    label="QR Code" 
+                    onPress={() => handleShowQR(event)} 
+                  />
+                  <CompactButton
                     icon={closed ? 'restore' : 'lock'}
-                    theme='secondary'
+                    label={closed ? 'Reopen' : 'Close'}
+                    danger={!closed} 
                     onPress={async () => {
-                      await closeEvent(event.id, closed ? 'reopen' : 'close');
+                      const { error } = await closeEvent(event.id, closed ? 'reopen' : 'close');
+                      if (error) {
+                        setMessage(error.message); 
+                        return;
+                      }
+                      eventBus.emit('eventClosed', { 
+                        eventId: event.id, 
+                        status: closed ? 'open' : 'closed', 
+                        action: closed ? 'reopen' : 'close' 
+                      });
                       loadEvents();
                     }}
-                    title={closed ? 'Reopen' : 'Close'}
                   />
                 </View>
               </View>
@@ -585,12 +667,23 @@ export default function TeacherScreen() {
 
       {payload && (
         <View style={styles.resultCard}>
-          <Text style={styles.resultTitle}>Scan this QR code with the Scan tab</Text>
+          <Text style={styles.resultTitle}>
+            QR Code for {payloadTitle}
+          </Text>
           <View style={styles.qrBox}>
             <QRCode value={payload} size={200} />
           </View>
           <Text style={styles.payloadText}>{payload}</Text>
-          <AppButton icon='refresh' onPress={() => setPayload(null)} theme='secondary' title='Generate new QR' />
+          
+          <AppButton 
+            icon='close' 
+            onPress={() => {
+              setPayload(null);
+              setPayloadTitle(null);
+            }} 
+            theme='secondary' 
+            title='Close QR' 
+          />
         </View>
       )}
     </ScrollView>
@@ -631,35 +724,101 @@ const styles = StyleSheet.create({
   resultCard: { backgroundColor: COLORS.card, borderRadius: 20, padding: 20, marginTop: 20, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, width: '100%' },
   resultTitle: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center', marginBottom: 14 },
   qrBox: { backgroundColor: COLORS.card, padding: 12, borderRadius: 14, marginBottom: 12 },
-  payloadText: { fontSize: 12, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 16 },
+  payloadText: { fontSize: 12, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 16, marginBottom: 16 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' },
   inlineText: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '600' },
   emptyText: { fontSize: 13, color: COLORS.textSecondary, paddingVertical: 10, lineHeight: 19 },
+  
+  // --- STYLES FOR EVENT LIST ---
   eventListItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 12,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.surface,
+    backgroundColor: COLORS.background,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 16,
+    marginTop: 12,
+    gap: 16,
   },
-  eventListCopy: { flex: 1, minWidth: 180 },
-  eventListTitle: { fontSize: 15, fontWeight: '800', color: COLORS.textPrimary },
-  eventListMeta: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
-  eventListStatus: {
+  eventListHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  eventListCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  eventListTitle: { 
+    fontSize: 16, 
+    fontWeight: '800', 
+    color: COLORS.textPrimary 
+  },
+  eventListMeta: { 
+    fontSize: 13, 
+    color: COLORS.textSecondary, 
+    marginTop: 4 
+  },
+  eventListActions: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  
+  // Status Badge
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  badgeOpen: {
+    backgroundColor: COLORS.successLight,
+    borderColor: COLORS.success,
+  },
+  badgeClosed: {
+    backgroundColor: '#F6E2E2',
+    borderColor: '#B33A3A',
+  },
+  badgeText: {
     fontSize: 11,
     fontWeight: '800',
     textTransform: 'capitalize',
-    color: COLORS.success,
-    backgroundColor: COLORS.primarySoft,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    alignSelf: 'flex-start',
+    color: COLORS.primaryDark,
   },
-  eventListStatusClosed: { color: '#B33A3A' },
-  eventListActions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  badgeTextClosed: {
+    color: '#B33A3A',
+  },
+
+  // Compact Button
+  compactButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  compactButtonDanger: {
+    backgroundColor: '#FFF0F0',
+    borderColor: '#FFC9C9',
+  },
+  compactButtonPressed: {
+    opacity: 0.7,
+  },
+  compactButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  compactButtonTextDanger: {
+    color: COLORS.danger,
+  },
+
+  // Detail Modal
   detailList: { marginTop: 8, gap: 10 },
   detailRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
   detailLabel: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '700' },
