@@ -138,7 +138,6 @@ export default function TeacherScreen() {
   const [editingPart, setEditingPart] = useState<'date' | 'time'>('date');
   const [pickerDraft, setPickerDraft] = useState(() => new Date());
   
-  // Added payloadTitle to know which event the QR code belongs to
   const [payload, setPayload] = useState<string | null>(null);
   const [payloadTitle, setPayloadTitle] = useState<string | null>(null);
 
@@ -267,8 +266,8 @@ export default function TeacherScreen() {
       title: event.title,
       venue: event.venue ?? null,
       description: event.description ?? null,
-      start: toLocalISO(new Date(event.start_time ?? Date.now())),
-      end: toLocalISO(new Date(event.end_time ?? Date.now() + 3600000)),
+      start: event.start_time ? event.start_time : toLocalISO(new Date()),
+      end: event.end_time ? event.end_time : toLocalISO(new Date(Date.now() + 3600000)),
     });
   };
 
@@ -285,7 +284,7 @@ export default function TeacherScreen() {
       setMessage(error.message);
       return;
     }
-    setMessage('Event updated.');
+    setMessage('Event updated. Please generate a new QR code.');
     setEditingEvent(null);
     loadEvents();
     eventBus.emit('eventUpdated', { eventId: editingEvent.id, title: editingEvent.title, start: editingEvent.start, end: editingEvent.end });
@@ -317,15 +316,15 @@ export default function TeacherScreen() {
     eventBus.emit('eventDeleted', { eventId: editingEvent.id });
   };
 
-  // NEW: Function to generate QR code for an existing event
   const handleShowQR = (event: CloudEvent) => {
+    // Fetch the freshest data available from the event object
     const qrEvent = {
       eventId: event.event_code,
       title: event.title,
       venue: event.venue ?? null,
       description: event.description ?? null,
-      start: event.start_time ? toLocalISO(new Date(event.start_time)) : toLocalISO(new Date()),
-      end: event.end_time ? toLocalISO(new Date(event.end_time)) : toLocalISO(new Date()),
+      start: event.start_time ? event.start_time : toLocalISO(new Date()),
+      end: event.end_time ? event.end_time : toLocalISO(new Date()),
     };
     setPayload(buildQRPayload(qrEvent));
     setPayloadTitle(event.title);
@@ -552,6 +551,21 @@ export default function TeacherScreen() {
             placeholder='Description'
             value={editingEvent.description ?? ''}
           />
+          
+          {/* Added: Ability to edit Start and End times */}
+          <TextField
+            label='Start Time (ISO Format)'
+            onChangeText={(value) => setEditingEvent({ ...editingEvent, start: value })}
+            placeholder='YYYY-MM-DDTHH:mm:ss'
+            value={editingEvent.start}
+          />
+          <TextField
+            label='End Time (ISO Format)'
+            onChangeText={(value) => setEditingEvent({ ...editingEvent, end: value })}
+            placeholder='YYYY-MM-DDTHH:mm:ss'
+            value={editingEvent.end}
+          />
+
           <View style={styles.row}>
             <AppButton icon='save' theme='primary' onPress={handleEditEvent} title='Save changes' />
             <AppButton icon='lock' theme='secondary' onPress={() => handleCloseEvent('close')} title='Close' />
@@ -571,7 +585,6 @@ export default function TeacherScreen() {
             return (
               <View key={event.id} style={styles.eventListItem}>
                 
-                {/* TOP ROW: Title and Status */}
                 <View style={styles.eventListHeader}>
                   <View style={styles.eventListCopy}>
                     <Text numberOfLines={1} style={styles.eventListTitle}>{event.title}</Text>
@@ -590,7 +603,6 @@ export default function TeacherScreen() {
                   </View>
                 </View>
 
-                {/* BOTTOM ROW: Action Buttons */}
                 <View style={styles.eventListActions}>
                   <CompactButton 
                     icon="visibility" 
@@ -632,6 +644,7 @@ export default function TeacherScreen() {
         )}
       </View>
 
+      {/* View Event Modal */}
       {viewingEvent && (
         <Modal animationType='fade' transparent visible onRequestClose={() => setViewingEvent(null)}>
           <View style={styles.modalScrim}>
@@ -659,32 +672,40 @@ export default function TeacherScreen() {
         </Modal>
       )}
 
+      {/* Message Box */}
       {message && (
         <View style={styles.messageBox}>
           <Text style={styles.message}>{message}</Text>
         </View>
       )}
 
+      {/* QR Code Modal (Fixed: Wrapped in a Modal so it pops up instantly) */}
       {payload && (
-        <View style={styles.resultCard}>
-          <Text style={styles.resultTitle}>
-            QR Code for {payloadTitle}
-          </Text>
-          <View style={styles.qrBox}>
-            <QRCode value={payload} size={200} />
+        <Modal animationType='fade' transparent visible onRequestClose={() => setPayload(null)}>
+          <View style={styles.modalScrim}>
+            <View accessibilityViewIsModal style={styles.qrModalSheet}>
+              <Text style={styles.resultTitle}>
+                QR Code for {payloadTitle}
+              </Text>
+              <View style={styles.qrBox}>
+                <QRCode value={payload} size={250} />
+              </View>
+              <Text style={styles.payloadText}>{payload}</Text>
+              
+              <View style={{ width: '100%', marginTop: 10 }}>
+                <AppButton 
+                  icon='close' 
+                  onPress={() => {
+                    setPayload(null);
+                    setPayloadTitle(null);
+                  }} 
+                  theme='primary' 
+                  title='Close QR' 
+                />
+              </View>
+            </View>
           </View>
-          <Text style={styles.payloadText}>{payload}</Text>
-          
-          <AppButton 
-            icon='close' 
-            onPress={() => {
-              setPayload(null);
-              setPayloadTitle(null);
-            }} 
-            theme='secondary' 
-            title='Close QR' 
-          />
-        </View>
+        </Modal>
       )}
     </ScrollView>
   );
@@ -712,24 +733,20 @@ const styles = StyleSheet.create({
   modalButtonPrimary: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   modalButtonPressed: { opacity: 0.7 },
   modalButtonText: { color: COLORS.textPrimary, fontSize: 15, fontWeight: '700' },
-  modalButtonPrimaryText: { color: COLORS.textOnPrimary, fontSize: 15, fontWeight: '700' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 16 },
   chipLabel: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '700' },
-  chip: { backgroundColor: COLORS.primarySoft, borderWidth: 1, borderColor: COLORS.border, borderRadius: 999, paddingHorizontal: 14, minHeight: 44, paddingVertical: 10, justifyContent: 'center' },
-  chipText: { fontSize: 13, fontWeight: '800', color: COLORS.primaryDark },
   messageBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.primarySoft, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginTop: 4, width: '100%' },
   message: { fontSize: 14, fontWeight: '600', flex: 1, color: COLORS.textPrimary },
-  messageSuccess: { color: COLORS.success },
-  messageError: { color: COLORS.danger },
-  resultCard: { backgroundColor: COLORS.card, borderRadius: 20, padding: 20, marginTop: 20, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, width: '100%' },
-  resultTitle: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center', marginBottom: 14 },
-  qrBox: { backgroundColor: COLORS.card, padding: 12, borderRadius: 14, marginBottom: 12 },
-  payloadText: { fontSize: 12, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 16, marginBottom: 16 },
+  
+  // --- NEW QR MODAL STYLES ---
+  qrModalSheet: { width: '100%', maxWidth: 400, backgroundColor: COLORS.card, borderRadius: 24, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
+  resultTitle: { fontSize: 16, fontWeight: '800', color: COLORS.textPrimary, textAlign: 'center', marginBottom: 16 },
+  qrBox: { backgroundColor: '#FFF', padding: 16, borderRadius: 16, marginBottom: 16 },
+  payloadText: { fontSize: 11, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 16, marginBottom: 20, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
+  
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' },
-  inlineText: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '600' },
   emptyText: { fontSize: 13, color: COLORS.textSecondary, paddingVertical: 10, lineHeight: 19 },
   
-  // --- STYLES FOR EVENT LIST ---
   eventListItem: {
     backgroundColor: COLORS.background,
     borderRadius: 16,
@@ -749,23 +766,13 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  eventListTitle: { 
-    fontSize: 16, 
-    fontWeight: '800', 
-    color: COLORS.textPrimary 
-  },
-  eventListMeta: { 
-    fontSize: 13, 
-    color: COLORS.textSecondary, 
-    marginTop: 4 
-  },
+  eventListTitle: { fontSize: 16, fontWeight: '800', color: COLORS.textPrimary },
+  eventListMeta: { fontSize: 13, color: COLORS.textSecondary, marginTop: 4 },
   eventListActions: {
     flexDirection: 'row',
     gap: 8,
     flexWrap: 'wrap',
   },
-  
-  // Status Badge
   badge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -789,8 +796,6 @@ const styles = StyleSheet.create({
   badgeTextClosed: {
     color: '#B33A3A',
   },
-
-  // Compact Button
   compactButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -817,8 +822,6 @@ const styles = StyleSheet.create({
   compactButtonTextDanger: {
     color: COLORS.danger,
   },
-
-  // Detail Modal
   detailList: { marginTop: 8, gap: 10 },
   detailRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
   detailLabel: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '700' },
