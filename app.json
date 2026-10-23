@@ -1,7 +1,8 @@
 {
   "expo": {
     "name": "QR-ATT",
-    "slug": "QR-ATT",
+    "slug": "qr-attendance",
+    "owner": "renzzu",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -22,7 +23,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.rhenzvyopada.QR-AttendX"
+      "package": "com.renzzu.qrattendance"
     },
     "web": {
       "output": "static",
@@ -56,7 +57,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "e144d1d3-3294-479a-9f03-54b67c43363e"
+        "projectId": "595c250a-32f3-4e98-9f19-5dbd86afb565"
       }
     }
   }

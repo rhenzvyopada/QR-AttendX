@@ -80,12 +80,18 @@ The app is a native Expo/React Native app and runs on Android. Two options:
 ### Option B — Native build with EAS (for a standalone APK)
 
 1. Log in to Expo: `npx eas login`
-2. Create an Android build: `npx eas build --platform android --profile preview`
-3. When the build finishes, open the link on your phone and install the `.apk`.
+2. In the Expo dashboard, open the project's **Environment variables** page and
+   add `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` to the
+   **Preview** environment. Use the values from your local `.env`; do not use a
+   Supabase `service_role` key. These `EXPO_PUBLIC_` values are included in the
+   app bundle, so they are not secrets.
+3. Create an Android APK: `npx eas build --platform android --profile preview`
+4. When the build finishes, open the link on your phone and install the `.apk`.
 
-   The `preview` profile uses `distribution: "internal"`, so the APK installs
-   directly on a device without going through the Play Store. The `production`
-   profile produces a Play Store–ready AAB.
+   The `preview` profile explicitly builds an APK for direct device installation
+   without going through the Play Store and uses the EAS **Preview** environment.
+   Add the same variables to the **Production** environment before building the
+   `production` profile, which produces a Play Store–ready AAB.
 
 ### Requirements
 
@@ -174,4 +180,3 @@ on conflict (id) do nothing;
 ```
 
 Make sure your account's **Account type** is set to **Teacher** on the Profile screen.
-
