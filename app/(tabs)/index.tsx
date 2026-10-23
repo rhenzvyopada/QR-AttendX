@@ -17,6 +17,7 @@ import {
   getAllAttendance,
   getAttendanceHistory,
   getTeacherEventAttendance,
+  type AdminAttendanceRecord,
   type AttendanceRecord,
   type TeacherEventAttendance,
 } from '@/lib/attendance';
@@ -58,10 +59,10 @@ export default function Index() {
   const [studentRecords, setStudentRecords] = useState<AttendanceRecord[]>([]);
   const [teacherEvents, setTeacherEvents] = useState<TeacherEventAttendance[]>([]);
   
-  // New states for Admin metrics
+  // Admin states
   const [adminUserCount, setAdminUserCount] = useState(0);
   const [adminEventCount, setAdminEventCount] = useState(0);
-  const [adminCheckInCount, setAdminCheckInCount] = useState(0);
+  const [adminRecords, setAdminRecords] = useState<AdminAttendanceRecord[]>([]);
 
   const [loading, setLoading] = useState(true);
 
@@ -89,7 +90,7 @@ export default function Index() {
           if (!active) return;
           setAdminUserCount(users?.length ?? 0);
           setAdminEventCount(events?.length ?? 0);
-          setAdminCheckInCount(attendance?.length ?? 0);
+          setAdminRecords(attendance ?? []);
         } else {
           setStudentRecords(await getAttendanceHistory(user.id));
         }
@@ -104,11 +105,12 @@ export default function Index() {
   );
 
   const pending = loading ? '—' : undefined;
+
   const monthlyCheckIns =
     role === 'teacher'
-      ? teacherEvents
-          .flatMap((event) => event.attendees)
-          .filter((attendee) => isThisMonth(attendee.scannedAt)).length
+      ? teacherEvents.flatMap((event) => event.attendees).filter((attendee) => isThisMonth(attendee.scannedAt)).length
+      : role === 'administrator'
+      ? adminRecords.filter((record) => isThisMonth(record.scannedAt)).length
       : studentRecords.filter((record) => isThisMonth(record.scannedAt)).length;
 
   const stats: Stat[] =
@@ -173,7 +175,7 @@ export default function Index() {
             key: 'checkins',
             icon: 'how-to-reg',
             label: 'Total check-ins',
-            value: pending ?? String(adminCheckInCount),
+            value: pending ?? String(adminRecords.length),
           },
         ]
       : [
@@ -225,6 +227,13 @@ export default function Index() {
           )
           .sort((first, second) => new Date(second.date).getTime() - new Date(first.date).getTime())
           .slice(0, 3)
+      : role === 'administrator'
+      ? adminRecords.slice(0, 3).map((record) => ({
+          id: record.id,
+          title: record.eventTitle,
+          subtitle: record.studentName || 'Unknown Student',
+          date: record.scannedAt,
+        }))
       : studentRecords.slice(0, 3).map((record) => ({
           id: record.id,
           title: record.eventTitle,

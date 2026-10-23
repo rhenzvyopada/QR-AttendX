@@ -196,28 +196,34 @@ export default function ProfileScreen() {
       <View style={styles.content}>
         <PageHeader
           eyebrow="Account"
-          title="My Profile"
-          
+          title="MY PROFILE"
         />
 
         <View style={styles.profileCard}>
           <View style={styles.identityBanner}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initial}</Text>
+            
+            {/* Top Row: Avatar and Edit Button */}
+            <View style={styles.identityTopRow}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{initial}</Text>
+              </View>
+              <ProfileAction
+                disabled={saving}
+                icon={editing ? 'check' : 'edit'}
+                label={saving ? 'Saving…' : editing ? 'Save' : 'Edit Profile'}
+                onPress={editing ? saveProfile : () => setEditing(true)}
+              />
             </View>
+
+            {/* Bottom Row: Text Info */}
             <View style={styles.identityCopy}>
               <Text numberOfLines={2} style={styles.identityName}>{displayName}</Text>
               <Text numberOfLines={1} style={styles.identityEmail}>{email}</Text>
               <View style={styles.roleBadge}>
-                <Text style={styles.roleText}>{roleLabel}</Text>
+                <Text numberOfLines={1} style={styles.roleText}>{roleLabel}</Text>
               </View>
             </View>
-            <ProfileAction
-              disabled={saving}
-              icon={editing ? 'check' : 'edit'}
-              label={saving ? 'Saving…' : editing ? 'Save' : 'Edit Profile'}
-              onPress={editing ? saveProfile : () => setEditing(true)}
-            />
+
           </View>
 
           <View style={styles.detailsPanel}>
@@ -351,45 +357,62 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: 22,
   },
+  
+  // --- UPDATED BANNER STYLES ---
   identityBanner: {
     width: '100%',
-    minHeight: 118,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    padding: 16,
+    padding: 20,
     borderRadius: 22,
     backgroundColor: COLORS.primary,
+    gap: 16,
+  },
+  identityTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  identityCopy: {
+    width: '100%',
   },
   avatar: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.card,
     borderWidth: 2,
     borderColor: COLORS.card,
   },
-  avatarText: { color: COLORS.primaryDark, fontSize: 25, fontWeight: '800' },
-  identityCopy: { flex: 1, minWidth: 0 },
+  avatarText: { color: COLORS.primaryDark, fontSize: 28, fontWeight: '800' },
+  identityName: { 
+    color: COLORS.textOnPrimary, 
+    fontSize: 22, 
+    lineHeight: 28, 
+    fontWeight: '800' 
+  },
+  identityEmail: {
+    color: COLORS.onPrimaryMuted,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 4,
+  },
   roleBadge: {
     alignSelf: 'flex-start',
     backgroundColor: COLORS.card,
     borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    marginTop: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    marginTop: 10,
   },
-  roleText: { color: COLORS.primaryDark, fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
-  identityName: { color: COLORS.textOnPrimary, fontSize: 17, lineHeight: 22, fontWeight: '800' },
-  identityEmail: {
-    color: COLORS.onPrimaryMuted,
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 2,
-    maxWidth: '100%',
+  roleText: { 
+    color: COLORS.primaryDark, 
+    fontSize: 12, 
+    fontWeight: '800', 
+    letterSpacing: 0.3 
   },
+  // -----------------------------
+
   detailsPanel: { width: '100%', minWidth: 0 },
   groupTitle: {
     color: COLORS.textPrimary,
@@ -441,7 +464,16 @@ const styles = StyleSheet.create({
   rowPressed: { opacity: 0.65 },
   message: { color: COLORS.danger, fontSize: 13, lineHeight: 19, marginTop: 0, marginBottom: 10, fontWeight: '600' },
   successMessage: { color: COLORS.success },
-  profileAction: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 13, paddingHorizontal: 12, paddingVertical: 10 },
+  profileAction: { 
+    minHeight: 42, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    gap: 6, 
+    borderRadius: 13, 
+    paddingHorizontal: 14, 
+    paddingVertical: 10 
+  },
   profileActionPrimary: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.card },
   profileActionGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: COLORS.border },
   profileActionPressed: { opacity: 0.75 },

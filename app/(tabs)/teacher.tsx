@@ -363,7 +363,6 @@ export default function TeacherScreen() {
         <PageHeader
           eyebrow='Teacher tools'
           title='Create event QR'
-          subtitle='Fill in the event details, then scan the generated QR with the Scan tab.'
         />
 
         <TextField

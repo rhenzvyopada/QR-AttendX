@@ -103,7 +103,7 @@ export default function TabLayout() {
               borderTopColor: COLORS.border,
               borderWidth: 1,
               borderColor: COLORS.border,
-              borderRadius: 18,
+              borderRadius: 50,
               marginHorizontal: 12,
               marginBottom: 10,
               paddingBottom: 6,

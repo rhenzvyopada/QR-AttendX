@@ -88,7 +88,7 @@ export default function HistoryScreen() {
       <PageHeader
         eyebrow="Activity"
         title={
-          isAdmin ? 'System history' : isTeacher ? 'Event attendance' : 'Attendance history'
+          isAdmin ? 'SYSTEM HISTORY' : isTeacher ? 'EVENT ATTENDANCE' : 'ATTENDANCE HISTORY'
         }
         subtitle={
           isAdmin

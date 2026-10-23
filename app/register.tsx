@@ -69,8 +69,7 @@ export default function RegisterScreen() {
           <Header title="QR AttendX" />
           
           <Text style={styles.title}>Create your account</Text>
-          <Text style={styles.subtitle}>Choose your role and start checking in with confidence.</Text>
-
+          
           <TextField
             autoCapitalize="words"
             label="Full Name"
@@ -103,10 +102,13 @@ export default function RegisterScreen() {
                   <MaterialIcons
                     color={active ? COLORS.primaryDark : COLORS.textSecondary}
                     name={option === 'student' ? 'school' : option === 'teacher' ? 'badge' : 'admin-panel-settings'}
-                    size={18}
+                    size={16}
                   />
-                  <Text style={[styles.roleText, active && styles.activeRoleText]}>
-                    {option === 'student' ? 'Student' : option === 'teacher' ? 'Teacher' : 'Administrator'}
+                  <Text 
+                    numberOfLines={1} 
+                    style={[styles.roleText, active && styles.activeRoleText]}
+                  >
+                    {option === 'student' ? 'Student' : option === 'teacher' ? 'Teacher' : 'Admin'}
                   </Text>
                 </Pressable>
               );
@@ -150,7 +152,7 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1, backgroundColor: COLORS.surface },
   content: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 40 },
   panel: {
     width: '100%',
@@ -162,34 +164,50 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     paddingTop: 18,
     paddingBottom: 32,
-    shadowColor: 'transparent',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0,
-    shadowRadius: 0,
-    elevation: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  compactPanel: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24, borderWidth: 0, borderRadius: 0, shadowOpacity: 0 },
+  
+  // UPDATED: Added border, borderRadius, and margins for mobile
+  compactPanel: { 
+    paddingHorizontal: 20, 
+    paddingTop: 24, 
+    paddingBottom: 32, 
+    borderWidth: 1, 
+    borderColor: COLORS.border, 
+    borderRadius: 20, 
+    marginHorizontal: 10,
+    backgroundColor: COLORS.card,
+  },
+  
   eyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 1.5, color: COLORS.primaryInk, marginBottom: 8, textAlign: 'center' },
   title: { fontSize: 28, lineHeight: 34, fontWeight: '800', letterSpacing: -0.5, color: COLORS.textPrimary, marginBottom: 6, textAlign: 'center' },
   subtitle: { fontSize: 15, lineHeight: 22, color: COLORS.textSecondary, marginBottom: 24, textAlign: 'center' },
   label: { fontSize: 13, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 8, marginTop: 4 },
-  roles: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  
+  // UPDATED: Tighter layout to prevent text wrapping
+  roles: { flexDirection: 'row', gap: 6, marginBottom: 16 },
   role: {
     flex: 1,
     minHeight: 50,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 4,
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: COLORS.card,
     borderRadius: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
   },
   activeRole: { backgroundColor: COLORS.accent, borderColor: COLORS.primary },
-  roleText: { color: COLORS.textSecondary, fontSize: 14, fontWeight: '700' },
+  roleText: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '700', flexShrink: 1 },
   activeRoleText: { color: COLORS.primaryDark, fontWeight: '800' },
+  
   errorBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 2, marginBottom: 6 },
   error: { color: COLORS.danger, fontSize: 14, flexShrink: 1, textAlign: 'center' },
   actions: { width: '100%', marginTop: 12, alignItems: 'center' },

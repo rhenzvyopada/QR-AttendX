@@ -53,7 +53,7 @@ export default function LoginScreen() {
         <View style={[styles.panel, compact && styles.compactPanel]}>
           <Header title="QR AttendX" />
           <Text style={styles.title}>Log in your account</Text>
-          <Text style={styles.subtitle}>Sign in to manage your events and attendance.</Text>
+          <Text style={styles.subtitle}></Text>
 
           <TextField
             autoCapitalize="none"
@@ -98,7 +98,7 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1, backgroundColor: COLORS.surface }, // Changed to surface for better contrast with the card
   content: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 40 },
   panel: {
     width: '100%',
@@ -110,13 +110,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     paddingTop: 18,
     paddingBottom: 32,
-    shadowColor: 'transparent',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0,
-    shadowRadius: 0,
-    elevation: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  compactPanel: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24, borderWidth: 0, borderRadius: 0, shadowOpacity: 0 },
+  
+  // UPDATED: Added border, borderRadius, and margins for mobile
+  compactPanel: { 
+    paddingHorizontal: 20, 
+    paddingTop: 24, 
+    paddingBottom: 32, 
+    borderWidth: 1, 
+    borderColor: COLORS.border, 
+    borderRadius: 20, 
+    marginHorizontal: 10, // Adds spacing from the screen edges
+    backgroundColor: COLORS.card,
+  },
+  
   eyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 1.5, color: COLORS.primaryInk, marginBottom: 8, textAlign: 'center' },
   title: { fontSize: 28, lineHeight: 34, fontWeight: '800', letterSpacing: -0.5, color: COLORS.textPrimary, marginBottom: 6, textAlign: 'center' },
   subtitle: { fontSize: 15, lineHeight: 22, color: COLORS.textSecondary, marginBottom: 24, textAlign: 'center' },

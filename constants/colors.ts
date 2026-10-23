@@ -11,7 +11,7 @@
 export const COLORS = {
   background: '#EFEFE3',
   primary: '#393E41',
-  accent: 'rgba(233, 79, 55, 0.12)',
+  accent: 'rgba(255, 253, 253, 0.12)',
 
   card: '#F6F7EB',
   elevated: '#FAFBF2',

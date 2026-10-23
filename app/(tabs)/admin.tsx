@@ -320,7 +320,6 @@ function UserRow({ user, onChanged }: { user: Profile; onChanged: () => void }) 
   return (
     <View style={styles.card}>
       <View style={styles.mainRow}>
-        {/* LEFT SIDE: Avatar & Info */}
         <View style={styles.leftContent}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{(user.full_name?.[0] ?? user.email?.[0] ?? 'U').toUpperCase()}</Text>
@@ -331,7 +330,6 @@ function UserRow({ user, onChanged }: { user: Profile; onChanged: () => void }) 
           </View>
         </View>
 
-        {/* RIGHT SIDE: Pills & Buttons */}
         <View style={styles.rightColumn}>
           <View style={[styles.statusPill, styles.statusPillOpen]}>
             <Text style={styles.statusPillText}>{user.role}</Text>
@@ -342,7 +340,6 @@ function UserRow({ user, onChanged }: { user: Profile; onChanged: () => void }) 
         </View>
       </View>
 
-      {/* INLINE EDITOR */}
       {editing && (
         <View style={styles.inlineEditor}>
           <Text style={styles.pickerLabel}>Assign role</Text>
@@ -416,7 +413,6 @@ function EventRow({
       return;
     }
     
-    // Emit event so other screens update
     eventBus.emit('eventClosed', { 
       eventId: event.id, 
       status: closed ? 'open' : 'closed', 
@@ -441,7 +437,6 @@ function EventRow({
   return (
     <View style={styles.card}>
       <View style={styles.mainRow}>
-        {/* LEFT SIDE: Avatar & Info */}
         <View style={styles.leftContent}>
           <View style={styles.avatar}>
             <MaterialIcons color={COLORS.primaryInk} name="event" size={20} />
@@ -459,7 +454,6 @@ function EventRow({
           </View>
         </View>
 
-        {/* RIGHT SIDE: Pills & Buttons */}
         <View style={styles.rightColumn}>
           <View style={styles.pillRow}>
             <View style={styles.countPill}>
@@ -489,7 +483,6 @@ function EventRow({
         </View>
       </View>
 
-      {/* INLINE EDITOR */}
       {editing && (
         <View style={styles.inlineEditor}>
           <TextField label="Event title" onChangeText={setTitle} placeholder="Event title" value={title} />
@@ -693,7 +686,13 @@ export default function AdminScreen() {
           </View>
         </View>
 
-        <View style={styles.tabbar}>
+        {/* Tab bar */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.tabbarScroll}
+          contentContainerStyle={styles.tabbar}
+        >
           {TABS.map((tab) => {
             const active = activeTab === tab.key;
             const count = tabCount(tab.key);
@@ -710,7 +709,9 @@ export default function AdminScreen() {
                   name={tab.icon}
                   size={16}
                 />
-                <Text style={[styles.tabText, active && styles.tabTextActive]}>{tab.label}</Text>
+                <Text numberOfLines={1} style={[styles.tabText, active && styles.tabTextActive]}>
+                  {tab.label}
+                </Text>
                 {count !== null && (
                   <View style={[styles.tabBadge, active && styles.tabBadgeActive]}>
                     <Text style={[styles.tabBadgeText, active && styles.tabBadgeTextActive]}>
@@ -721,7 +722,7 @@ export default function AdminScreen() {
               </Pressable>
             );
           })}
-        </View>
+        </ScrollView>
 
         {loading ? (
           <View style={styles.loadingState}>
@@ -919,34 +920,40 @@ const styles = StyleSheet.create({
   },
   bannerStatValue: { fontSize: 24, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.5 },
   bannerStatLabel: { fontSize: 11, fontWeight: '700', color: COLORS.textSecondary },
+  
+  // UPDATED SCROLLABLE TABBAR STYLES
+  tabbarScroll: {
+    marginBottom: 20,
+  },
   tabbar: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
     backgroundColor: COLORS.surface,
-    padding: 8,
+    padding: 6,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-    marginBottom: 20,
+    flexGrow: 1, // Allows background to stretch on desktop
   },
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingVertical: 10,
     borderRadius: 11,
     backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: 'transparent',
+    flexShrink: 0, // Prevents text wrapping
   },
   tabActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   tabText: { fontSize: 12, fontWeight: '700', color: COLORS.textSecondary },
   tabTextActive: { color: COLORS.textOnPrimary, fontWeight: '800' },
   tabBadge: {
-    minWidth: 24,
-    paddingHorizontal: 7,
+    minWidth: 20,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 999,
     backgroundColor: COLORS.card,
@@ -954,6 +961,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 2,
   },
   tabBadgeActive: {
     backgroundColor: 'rgba(255, 255, 255, 0.18)',
@@ -961,6 +969,7 @@ const styles = StyleSheet.create({
   },
   tabBadgeText: { fontSize: 10, fontWeight: '800', color: COLORS.textSecondary },
   tabBadgeTextActive: { color: COLORS.textOnPrimary },
+
   loadingState: { paddingVertical: 40, alignItems: 'center', gap: 10, backgroundColor: COLORS.background },
   loadingText: { color: COLORS.textSecondary, fontSize: 14 },
   section: {
